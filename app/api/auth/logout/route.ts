@@ -1,0 +1,20 @@
+import { NextResponse } from "next/server";
+
+import { deleteSession, SESSION_COOKIE_NAME } from "@/lib/auth/session";
+
+export async function POST(request: Request) {
+  const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+  if (token) {
+    await deleteSession(token);
+  }
+
+  const response = NextResponse.redirect(new URL("/login", request.url));
+  response.cookies.set(SESSION_COOKIE_NAME, "", {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    expires: new Date(0),
+    path: "/",
+  });
+  return response;
+}
