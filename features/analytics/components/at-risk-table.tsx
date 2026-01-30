@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import Image from "next/image";
 import {
   flexRender,
   getCoreRowModel,
@@ -14,7 +13,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
-import type { AtRiskStudent } from "@/lib/mock-data";
+import type { AtRiskStudent } from "@/lib/analytics/dashboard";
 
 interface AtRiskTableProps {
   data: AtRiskStudent[];
@@ -31,32 +30,18 @@ export function AtRiskTable({ data, page, pageSize, totalCount }: AtRiskTablePro
         header: "Student",
         accessorKey: "name",
         cell: ({ row }) => (
-          <div className="flex items-center gap-3">
-            <Image
-              src={row.original.avatarUrl}
-              alt={row.original.name}
-              width={32}
-              height={32}
-              className="h-8 w-8 rounded-full"
-            />
-            <div>
-              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                {row.original.name}
-              </div>
-              <div className="text-xs text-slate-500">{row.original.gradeLevel}</div>
+          <div>
+            <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+              {row.original.name}
             </div>
+            <div className="text-xs text-slate-500">{row.original.gradeLevel}</div>
           </div>
         ),
       },
       {
-        header: "GPA",
-        accessorKey: "gpa",
-        cell: ({ row }) => row.original.gpa.toFixed(2),
-      },
-      {
-        header: "Attendance",
-        accessorKey: "attendanceRate",
-        cell: ({ row }) => `${row.original.attendanceRate}%`,
+        header: "Avg Score",
+        accessorKey: "averageScore",
+        cell: ({ row }) => row.original.averageScore.toFixed(2),
       },
       {
         header: "Risk",
@@ -77,9 +62,9 @@ export function AtRiskTable({ data, page, pageSize, totalCount }: AtRiskTablePro
       },
       {
         header: "Actions",
-        cell: () => (
-          <Button size="sm" variant="outline">
-            Launch Plan
+        cell: ({ row }) => (
+          <Button asChild size="sm" variant="outline">
+            <Link href={`/students/${row.original.id}`}>View</Link>
           </Button>
         ),
       },
@@ -110,7 +95,7 @@ export function AtRiskTable({ data, page, pageSize, totalCount }: AtRiskTablePro
   const canNext = page < totalPages;
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white/90 dark:border-slate-800 dark:bg-slate-950/90">
+    <div className="rounded-xl border border-slate-200 bg-white/90 transition-transform duration-300 ease-out hover:-translate-y-1 dark:border-slate-800 dark:bg-slate-950/90">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3 dark:border-slate-800">
         <div className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-500">
           At-Risk Students
@@ -122,7 +107,7 @@ export function AtRiskTable({ data, page, pageSize, totalCount }: AtRiskTablePro
           className="h-8 w-48 rounded-md border border-slate-200 bg-white/80 px-3 text-xs text-slate-700 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 dark:border-slate-800 dark:bg-slate-950/80 dark:text-slate-200 dark:focus-visible:ring-slate-600"
         />
       </div>
-      <div className="grid grid-cols-5 gap-4 border-b border-slate-200 px-4 py-2 text-xs font-semibold uppercase text-slate-500 dark:border-slate-800">
+      <div className="grid grid-cols-4 gap-4 border-b border-slate-200 px-4 py-2 text-xs font-semibold uppercase text-slate-500 dark:border-slate-800">
         {table.getHeaderGroups().map((headerGroup) =>
           headerGroup.headers.map((header) => (
             <div key={header.id}>
@@ -145,7 +130,7 @@ export function AtRiskTable({ data, page, pageSize, totalCount }: AtRiskTablePro
             return (
               <div
                 key={row.id}
-                className="grid grid-cols-5 gap-4 border-b border-slate-100 px-4 py-3 text-sm text-slate-600 dark:border-slate-800/60 dark:text-slate-200"
+                className="grid grid-cols-4 gap-4 border-b border-slate-100 px-4 py-3 text-sm text-slate-600 dark:border-slate-800/60 dark:text-slate-200"
                 style={{
                   position: "absolute",
                   top: 0,

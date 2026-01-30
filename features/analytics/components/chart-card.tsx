@@ -8,7 +8,7 @@ interface ChartCardProps {
 
 export function ChartCard({ title, subtitle, children }: ChartCardProps) {
   return (
-    <Card className="h-full">
+    <Card className="h-full transition-transform duration-300 ease-out hover:-translate-y-1">
       <CardHeader>
         <CardTitle className="text-sm uppercase tracking-[0.2em] text-slate-500">
           {title}
