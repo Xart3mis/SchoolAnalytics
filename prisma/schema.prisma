@@ -4,15 +4,156 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Trimester {
+  T1
+  T2
+  T3
+}
+
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model User {
+  id           String      @id @default(cuid())
+  email        String      @unique
+  passwordHash String
+  role         Role        @default(USER)
+  displayName  String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  sessions     Session[]
+  adminNotes   AdminNote[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model Student {
-  id              String   @id @default(cuid())
-  fullName        String
-  gradeLevel      String
-  gpa             Float
-  attendanceRate  Float
-  outstandingFees Float
-  createdAt       DateTime @default(now())
+  id             String                      @id @default(cuid())
+  externalId     String?                     @unique
+  fullName       String
+  gradeLevel     Int
+  createdAt      DateTime                    @default(now())
+  updatedAt      DateTime                    @updatedAt
+  enrollments    StudentClassEnrollment[]
+  subjectScores  StudentSubjectTermScore[]
+  termSummaries  StudentTermSummary[]
+}
+
+model Class {
+  id            String                      @id @default(cuid())
+  name          String
+  gradeLevel    Int
+  academicYear  String
+  createdAt     DateTime                    @default(now())
+  updatedAt     DateTime                    @updatedAt
+  enrollments   StudentClassEnrollment[]
+  subjectScores StudentSubjectTermScore[]
+
+  @@index([academicYear, gradeLevel])
+}
+
+model Subject {
+  id            String                      @id @default(cuid())
+  code          String
+  name          String
+  createdAt     DateTime                    @default(now())
+  updatedAt     DateTime                    @updatedAt
+  subjectScores StudentSubjectTermScore[]
+
+  @@unique([code])
+}
+
+model Term {
+  id             String                      @id @default(cuid())
+  academicYear   String
+  trimester      Trimester
+  startDate      DateTime?
+  endDate        DateTime?
+  createdAt      DateTime                    @default(now())
+  updatedAt      DateTime                    @updatedAt
+  subjectScores  StudentSubjectTermScore[]
+  studentSummaries StudentTermSummary[]
+
+  @@unique([academicYear, trimester])
+}
+
+model StudentClassEnrollment {
+  id        String   @id @default(cuid())
+  studentId String
+  classId   String
+  startDate DateTime?
+  endDate   DateTime?
+  createdAt DateTime @default(now())
+  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  class     Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, classId])
+  @@index([classId])
+}
+
+model StudentSubjectTermScore {
+  id          String   @id @default(cuid())
+  studentId   String
+  classId     String
+  subjectId   String
+  termId      String
+  criterionA  Int
+  criterionB  Int
+  criterionC  Int
+  criterionD  Int
+  overallScore Float?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  class       Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject     Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  term        Term     @relation(fields: [termId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, subjectId, termId])
+  @@index([classId, subjectId, termId])
+  @@index([studentId, termId])
+}
+
+model StudentTermSummary {
+  id           String    @id @default(cuid())
+  studentId    String
+  termId       String
+  overallScore Float?
+  riskLevel    RiskLevel?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  student      Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  term         Term      @relation(fields: [termId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, termId])
+  @@index([termId])
+}
+
+model AdminNote {
+  id        String   @id @default(cuid())
+  authorId  String
+  pageKey   String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([pageKey])
 }
