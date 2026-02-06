@@ -76,7 +76,7 @@ export function getMockDashboardData(): DashboardData {
       { group: "Grade 11", value: 25 },
       { group: "Grade 12", value: 25 },
     ],
-    atRisk: Array.from({ length: 60 }).map((_, index) => ({
+    atRisk: Array.from({ length: 5 }).map((_, index) => ({
       id: `student-${index + 1}`,
       name: [
         "Avery Chen",

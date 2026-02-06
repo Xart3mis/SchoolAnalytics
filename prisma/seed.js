@@ -1,9 +1,21 @@
-import { NextResponse } from "next/server";
-import { randomUUID } from "crypto";
+/* eslint-disable no-console */
+require("dotenv/config");
 
-import { hashPassword } from "@/lib/auth/password";
-import { getMockDashboardData } from "@/lib/mock-data";
-import { prisma } from "@/lib/prisma";
+const { randomUUID } = require("crypto");
+const bcrypt = require("bcryptjs");
+const { PrismaClient } = require("@prisma/client");
+const { PrismaPg } = require("@prisma/adapter-pg");
+const pg = require("pg");
+
+const pool = new pg.Pool({
+  connectionString: process.env.DATABASE_URL,
+});
+
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({
+  adapter,
+  log: ["error"],
+});
 
 const SUBJECTS = [
   { code: "MATH", name: "Mathematics" },
@@ -12,27 +24,32 @@ const SUBJECTS = [
   { code: "HIST", name: "History" },
 ];
 
-export async function POST() {
-  const data = getMockDashboardData();
+const SEED_STUDENTS = [
+  { name: "Avery Chen", gradeLevel: "Grade 9" },
+  { name: "Jordan Patel", gradeLevel: "Grade 10" },
+  { name: "Riley Morgan", gradeLevel: "Grade 11" },
+  { name: "Samira Ali", gradeLevel: "Grade 12" },
+  { name: "Evan Brooks", gradeLevel: "Grade 9" },
+];
 
-  const q = (id: string) => `"${id.replace(/"/g, '""')}"`;
+async function main() {
+  const q = (id) => `"${String(id).replace(/"/g, '""')}"`;
 
-  for (const { tablename } of await prisma.$queryRaw<
-    Array<{ tablename: string }>
-  >`SELECT tablename FROM pg_tables WHERE schemaname='public'`) {
-    if (!q(tablename).includes("prisma"))
+  for (const { tablename } of await prisma.$queryRawUnsafe(
+    `SELECT tablename FROM pg_tables WHERE schemaname='public'`
+  )) {
+    if (!q(tablename).includes("prisma")) {
       await prisma.$executeRawUnsafe(`TRUNCATE TABLE ${q(tablename)} CASCADE;`);
+    }
   }
 
-  for (const { relname } of await prisma.$queryRaw<
-    Array<{ relname: string }>
-  >`SELECT c.relname
-  FROM pg_class AS c
-  JOIN pg_namespace AS n ON c.relnamespace = n.oid
-  WHERE c.relkind='S' AND n.nspname='public';`) {
-    await prisma.$executeRawUnsafe(
-      `ALTER SEQUENCE ${q(relname)} RESTART WITH 1;`,
-    );
+  for (const { relname } of await prisma.$queryRawUnsafe(
+    `SELECT c.relname
+     FROM pg_class AS c
+     JOIN pg_namespace AS n ON c.relnamespace = n.oid
+     WHERE c.relkind='S' AND n.nspname='public';`
+  )) {
+    await prisma.$executeRawUnsafe(`ALTER SEQUENCE ${q(relname)} RESTART WITH 1;`);
   }
 
   const organization = await prisma.organization.create({
@@ -54,7 +71,7 @@ export async function POST() {
     { name: "T3", startDate: new Date("2026-03-16"), endDate: new Date("2026-06-15") },
   ];
 
-  const terms = [] as Array<{ id: string; name: string; startDate: Date; endDate: Date }>;
+  const terms = [];
   for (const term of termDefinitions) {
     terms.push(
       await prisma.academicTerm.create({
@@ -66,7 +83,7 @@ export async function POST() {
     );
   }
 
-  const gradeLevels = [] as Array<{ id: string; name: string }>;
+  const gradeLevels = [];
   for (const grade of [9, 10, 11, 12]) {
     gradeLevels.push(
       await prisma.gradeLevel.create({
@@ -78,7 +95,7 @@ export async function POST() {
   }
 
   const gradeLevelByName = new Map(gradeLevels.map((level) => [level.name, level]));
-  const courses = [] as Array<{ id: string; name: string; gradeLevelId: string; subjectIndex: number }>;
+  const courses = [];
   for (const level of gradeLevels) {
     for (const [subjectIndex, subject] of SUBJECTS.entries()) {
       const course = await prisma.course.create({
@@ -100,9 +117,8 @@ export async function POST() {
 
   const courseById = new Map(courses.map((course) => [course.id, course]));
 
-  const classSections = [] as Array<{ id: string; courseId: string; academicTermId: string }>;
-  const classSectionByCourseTerm = new Map<string, string>();
-  const classSectionsByGradeLevel = new Map<string, string[]>();
+  const classSections = [];
+  const classSectionsByGradeLevel = new Map();
 
   for (const term of terms) {
     for (const course of courses) {
@@ -121,20 +137,19 @@ export async function POST() {
         courseId: course.id,
         academicTermId: term.id,
       });
-      classSectionByCourseTerm.set(`${course.id}:${term.id}`, classSection.id);
       const existing = classSectionsByGradeLevel.get(course.gradeLevelId) ?? [];
       existing.push(classSection.id);
       classSectionsByGradeLevel.set(course.gradeLevelId, existing);
     }
   }
 
-  const assignmentsByClassSection = new Map<string, { id: string; index: number }[]>();
+  const assignmentsByClassSection = new Map();
   for (const classSection of classSections) {
     const course = courseById.get(classSection.courseId);
     if (!course) continue;
     const term = terms.find((t) => t.id === classSection.academicTermId);
     if (!term) continue;
-    const assignments: { id: string; index: number }[] = [];
+    const assignments = [];
     for (let index = 1; index <= 4; index += 1) {
       const dueDate = new Date(term.startDate.getTime() + index * 7 * 24 * 60 * 60 * 1000);
       const created = await prisma.assignment.create({
@@ -151,8 +166,8 @@ export async function POST() {
     assignmentsByClassSection.set(classSection.id, assignments);
   }
 
-  const students = [] as Array<{ id: string; gradeLevelId: string; index: number }>;
-  for (const [index, student] of data.atRisk.entries()) {
+  const students = [];
+  for (const [index, student] of SEED_STUDENTS.entries()) {
     const [firstName, ...lastNameParts] = student.name.split(" ");
     const lastName = lastNameParts.join(" ") || null;
     const gradeNumber = Number(student.gradeLevel.replace("Grade ", ""));
@@ -180,7 +195,7 @@ export async function POST() {
     students.push({ id: studentRecord.id, gradeLevelId: gradeLevel.id, index });
   }
 
-  const enrollments = [] as Array<{ classSectionId: string; studentId: string; role: "STUDENT" }>;
+  const enrollments = [];
   for (const student of students) {
     const classSectionIds = classSectionsByGradeLevel.get(student.gradeLevelId) ?? [];
     for (const classSectionId of classSectionIds) {
@@ -196,20 +211,8 @@ export async function POST() {
     await prisma.enrollment.createMany({ data: enrollments, skipDuplicates: true });
   }
 
-  const gradeEntries = [] as Array<{
-    id: string;
-    studentId: string;
-    assignmentId: string;
-    isSubmitted: boolean;
-    submittedAt: Date;
-  }>;
-
-  const gradeEntryCriteria = [] as Array<{
-    id: string;
-    gradeEntryId: string;
-    criterion: "A" | "B" | "C" | "D";
-    score: number;
-  }>;
+  const gradeEntries = [];
+  const gradeEntryCriteria = [];
 
   for (const classSection of classSections) {
     const course = courseById.get(classSection.courseId);
@@ -234,7 +237,7 @@ export async function POST() {
           submittedAt: new Date(),
         });
 
-        const criteria = ["A", "B", "C", "D"] as const;
+        const criteria = ["A", "B", "C", "D"];
         criteria.forEach((criterion, criterionIndex) => {
           const scoreBase = (base + criterionIndex * 2) % 8;
           gradeEntryCriteria.push({
@@ -256,18 +259,32 @@ export async function POST() {
     await prisma.gradeEntryCriterion.createMany({ data: gradeEntryCriteria });
   }
 
-  if (process.env.SEED_ADMIN_EMAIL && process.env.SEED_ADMIN_PASSWORD) {
-    const passwordHash = await hashPassword(process.env.SEED_ADMIN_PASSWORD);
+  const adminEmail = process.env.SEED_ADMIN_EMAIL?.trim();
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD;
+  if (adminEmail && adminPassword) {
+    const passwordHash = await bcrypt.hash(adminPassword, 12);
     await prisma.user.create({
       data: {
-        email: process.env.SEED_ADMIN_EMAIL.toLowerCase(),
+        email: adminEmail.toLowerCase(),
         passwordHash,
         role: "ADMIN",
         displayName: "Admin",
         organizationId: organization.id,
       },
     });
+  } else if (adminEmail || adminPassword) {
+    console.warn("Seed admin credentials incomplete; skipping admin user creation.");
   }
 
-  return NextResponse.json({ status: "ok", inserted: students.length });
+  console.log(`Seeded ${students.length} students, ${gradeEntries.length} grade entries.`);
 }
+
+main()
+  .catch((error) => {
+    console.error("Seed failed", error);
+    process.exitCode = 1;
+  })
+  .finally(async () => {
+    await prisma.$disconnect();
+    await pool.end();
+  });
