@@ -2,6 +2,8 @@
 
 # dependencies
 /node_modules
+**/node_modules
+packages/db/src/generated
 /.pnp
 .pnp.js
 
@@ -10,6 +12,7 @@
 
 # next.js
 /.next/
+**/.next/
 /out/
 
 # production

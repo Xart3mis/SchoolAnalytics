@@ -1,0 +1,15 @@
+{
+  "name": "@school-analytics/worker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js"
+  },
+  "dependencies": {
+    "@school-analytics/db": "*",
+    "bullmq": "^5.58.5",
+    "dotenv": "^17.2.3",
+    "ioredis": "^5.8.1"
+  }
+}
