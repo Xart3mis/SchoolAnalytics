@@ -1,52 +1,21 @@
 {
-  "name": "school-analytics-dashboard",
-  "version": "0.1.0",
+  "name": "school-analytics-monorepo",
   "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev",
-    "seed": "next dev --hostname localhost --port 3000"
-  },
-  "dependencies": {
-    "@prisma/adapter-pg": "^7.3.0",
-    "@prisma/client": "^7.3.0",
-    "@radix-ui/react-avatar": "^1.1.11",
-    "@radix-ui/react-slot": "^1.2.4",
-    "@tanstack/react-query": "^5.90.20",
-    "@tanstack/react-table": "^8.21.3",
-    "@tanstack/react-virtual": "^3.13.18",
-    "bcryptjs": "^3.0.3",
-    "class-variance-authority": "^0.7.1",
-    "clsx": "^2.1.1",
-    "cmdk": "^1.1.1",
-    "dotenv": "^17.2.3",
-    "lucide-react": "^0.563.0",
-    "next": "16.1.6",
-    "next-themes": "^0.4.6",
-    "pg": "^8.17.2",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
-    "recharts": "^3.7.0",
-    "socket.io-client": "^4.8.3",
-    "tailwind-merge": "^3.4.0",
-    "zod": "^4.3.6",
-    "zustand": "^5.0.10"
-  },
-  "devDependencies": {
-    "@tailwindcss/postcss": "^4.1.18",
-    "@types/node": "^25.1.0",
-    "@types/react": "^19.2.10",
-    "@types/react-dom": "^19.2.3",
-    "autoprefixer": "^10.4.23",
-    "eslint": "^9.39.2",
-    "eslint-config-next": "16.1.6",
-    "postcss": "^8.5.6",
-    "prisma": "^7.3.0",
-    "tailwindcss": "^4.1.18",
-    "typescript": "^5.9.3"
+    "dev": "npm run dev --workspace @school-analytics/web",
+    "dev:web": "npm run dev --workspace @school-analytics/web",
+    "dev:worker": "npm run dev --workspace @school-analytics/worker",
+    "dev:scheduler": "npm run dev --workspace @school-analytics/scheduler",
+    "build": "npm run build --workspaces --if-present",
+    "build:web": "npm run build --workspace @school-analytics/web",
+    "start:web": "npm run start --workspace @school-analytics/web",
+    "lint": "npm run lint --workspaces --if-present",
+    "prisma:generate": "npm run prisma:generate --workspace @school-analytics/db",
+    "prisma:migrate": "npm run prisma:migrate --workspace @school-analytics/db",
+    "db:seed": "npm run db:seed --workspace @school-analytics/db"
   }
 }
