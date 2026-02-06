@@ -64,3 +64,20 @@ export async function POST(request: Request) {
     },
   });
 }
+
+export async function DELETE(request: Request) {
+  const session = await getSessionFromCookies();
+  if (!session || session.user.role !== "ADMIN") {
+    return NextResponse.json({ error: "Unauthorized." }, { status: 403 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const noteId = searchParams.get("id");
+  if (!noteId) {
+    return NextResponse.json({ error: "id required." }, { status: 400 });
+  }
+
+  await prisma.adminNote.delete({ where: { id: noteId } });
+
+  return NextResponse.json({ ok: true });
+}

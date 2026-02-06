@@ -39,7 +39,7 @@ export default function LoginPage() {
 
   return (
     <div className="app-background flex min-h-screen items-center justify-center px-6">
-      <Card className="w-full max-w-md border-slate-200/60 bg-white/95 shadow-[0_30px_60px_-40px_rgba(15,23,42,0.6)] backdrop-blur dark:border-slate-800/60 dark:bg-slate-950/80 dark:shadow-slate-950/60 animate-fade-up">
+      <Card className="w-full max-w-md shadow-[0_30px_60px_-40px_rgba(44,73,127,0.3)] dark:shadow-[0_30px_60px_-40px_rgba(0,14,20,0.8)] animate-fade-up">
         <CardHeader>
           <CardTitle className="text-2xl">Welcome back</CardTitle>
           <CardDescription>Sign in to view performance analytics.</CardDescription>
@@ -47,13 +47,13 @@ export default function LoginPage() {
         <CardContent>
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-600 dark:text-slate-300" htmlFor="email">
+              <label className="text-sm font-medium text-[color:var(--text)]" htmlFor="email">
                 Email
               </label>
               <Input id="email" name="email" type="email" placeholder="you@school.org" required />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-600 dark:text-slate-300" htmlFor="password">
+              <label className="text-sm font-medium text-[color:var(--text)]" htmlFor="password">
                 Password
               </label>
               <Input id="password" name="password" type="password" required />

@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import Link from "next/link";
 
 import type { AtRiskRow } from "@/lib/analytics/risk";
@@ -8,59 +9,80 @@ interface AtRiskMiniTableProps {
   title: string;
   data: AtRiskRow[];
   exportHref: string;
+  termId?: string;
 }
 
-export function AtRiskMiniTable({ title, data, exportHref }: AtRiskMiniTableProps) {
+export function AtRiskMiniTable({ title, data, exportHref, termId }: AtRiskMiniTableProps) {
+  const [filter, setFilter] = React.useState("");
+  const trimmedFilter = filter.trim().toLowerCase();
+  const filteredData = trimmedFilter
+    ? data.filter((row) => row.fullName.toLowerCase().includes(trimmedFilter))
+    : data;
+
   return (
-    <div className="rounded-xl border border-slate-200 bg-white/90 transition-transform duration-300 ease-out hover:-translate-y-1 dark:border-slate-800 dark:bg-slate-950/90">
-      <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-slate-500 dark:border-slate-800">
-        <span>{title}</span>
-        <Link
-          href={exportHref}
-          className="rounded-full border border-slate-200 px-3 py-1 text-[10px] uppercase tracking-[0.2em] text-slate-500 dark:border-slate-800 dark:text-slate-300"
-        >
-          Export CSV
-        </Link>
+    <div className="rounded-xl border border-[color:var(--border)] bg-[color:var(--surface)] shadow-[0_14px_34px_-26px_rgba(28,36,48,0.3)] transition-transform duration-300 ease-out hover:-translate-y-0.5 dark:shadow-[0_18px_44px_-32px_rgba(0,0,0,0.55)] sm:rounded-2xl">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[color:var(--border)] px-4 py-3">
+        <span className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--accent)]">
+          {title}
+        </span>
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          <input
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+            placeholder="Filter name"
+            className="h-8 w-full rounded-md border border-[color:var(--border)] bg-[color:var(--surface)] px-3 text-xs text-[color:var(--text)] placeholder:text-[color:var(--text-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent)] sm:w-40"
+          />
+          <Link
+            href={exportHref}
+            className="rounded-full border border-[color:var(--border)] px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-[color:var(--accent)]"
+          >
+            Export CSV
+          </Link>
+        </div>
       </div>
-      <div className="grid grid-cols-4 gap-3 border-b border-slate-200 px-4 py-2 text-xs font-semibold uppercase text-slate-500 dark:border-slate-800">
-        <div>Student</div>
-        <div>Grade</div>
-        <div>Avg</div>
-        <div>Risk</div>
-      </div>
-      <div className="divide-y divide-slate-100 dark:divide-slate-800/60">
-        {data.length === 0 ? (
-          <div className="px-4 py-6 text-sm text-slate-500">No at-risk students.</div>
-        ) : (
-          data.map((row) => (
-            <div
-              key={row.id}
-              className="grid grid-cols-4 gap-3 px-4 py-3 text-sm text-slate-600 dark:text-slate-200"
-            >
-              <Link
-                href={`/students/${row.id}`}
-                className="font-medium text-slate-900 hover:text-slate-700 dark:text-slate-100"
-              >
-                {row.fullName}
-              </Link>
-              <div>Grade {row.gradeLevel}</div>
-              <div>{row.averageScore.toFixed(2)}</div>
-              <div>
-                <span
-                  className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                    row.riskLevel === "High"
-                      ? "bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-200"
-                      : row.riskLevel === "Medium"
-                        ? "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-200"
-                        : "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-200"
-                  }`}
+      <div className="overflow-x-auto">
+        <div className="min-w-[520px]">
+          <div className="grid grid-cols-4 gap-3 border-b border-[color:var(--border)] px-4 py-2 text-xs font-semibold uppercase text-[color:var(--text-muted)]">
+            <div>Student</div>
+            <div>Grade</div>
+            <div>Avg Final</div>
+            <div>Risk</div>
+          </div>
+          <div className="divide-y divide-[color:var(--border)]">
+            {filteredData.length === 0 ? (
+              <div className="px-4 py-6 text-sm text-[color:var(--text-muted)]">No at-risk students.</div>
+            ) : (
+              filteredData.map((row) => (
+                <div
+                  key={row.id}
+                  className="grid grid-cols-4 gap-3 px-4 py-3 text-[13px] text-[color:var(--text)] sm:text-sm"
                 >
-                  {row.riskLevel}
-                </span>
-              </div>
-            </div>
-          ))
-        )}
+                  <Link
+                    href={`/students/${row.id}${termId ? `?term=${termId}` : ""}`}
+                    className="font-medium text-[color:var(--text)] hover:text-[color:var(--accent-3)]"
+                  >
+                    {row.fullName}
+                  </Link>
+                  <div>Grade {row.gradeLevel}</div>
+                  <div>{row.averageScore.toFixed(2)}</div>
+                  <div>
+                    <span
+                      className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-wide ${
+                        row.riskLevel === "High"
+                          ? "bg-[color:var(--risk-high-bg)] text-[color:var(--risk-high-text)]"
+                          : row.riskLevel === "Medium"
+                            ? "bg-[color:var(--risk-medium-bg)] text-[color:var(--risk-medium-text)]"
+                            : "bg-[color:var(--risk-low-bg)] text-[color:var(--risk-low-text)]"
+                      }`}
+                    >
+                      {row.riskLevel}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

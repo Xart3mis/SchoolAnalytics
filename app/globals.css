@@ -1,11 +1,59 @@
 @import "tailwindcss";
 
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
+  --bg: #f6f7fb;
+  --surface: #ffffff;
+  --surface-strong: #f1f4f8;
+  --border: #d9e0e8;
+  --text: #1c2430;
+  --text-muted: #566173;
+  --accent: #2a7f62;
+  --accent-2: #2f6fb2;
+  --accent-3: #1f3f76;
+  --danger: #c13a4b;
+  --chart-1: #2a7f62;
+  --chart-2: #2f6fb2;
+  --chart-3: #1f3f76;
+  --chart-4: #c13a4b;
+  --chart-5: #b07a2b;
+  --risk-high-bg: #ffe7ea;
+  --risk-high-text: #9b1d2c;
+  --risk-medium-bg: #e7f0ff;
+  --risk-medium-text: #2a5fa0;
+  --risk-low-bg: #e7f6ef;
+  --risk-low-text: #1f6a4c;
+}
+
+.dark {
+  color-scheme: dark;
+  --bg: #0b1116;
+  --surface: #121a22;
+  --surface-strong: #19232e;
+  --border: #273443;
+  --text: #e7eef6;
+  --text-muted: #b2bfcd;
+  --accent: #2bb38a;
+  --accent-2: #4b84c6;
+  --accent-3: #6b8fd8;
+  --danger: #e05a6c;
+  --chart-1: #2bb38a;
+  --chart-2: #4b84c6;
+  --chart-3: #6b8fd8;
+  --chart-4: #e05a6c;
+  --chart-5: #e2b45e;
+  --risk-high-bg: #3a1f25;
+  --risk-high-text: #ffb7c0;
+  --risk-medium-bg: #1f2c3d;
+  --risk-medium-text: #a8c9ff;
+  --risk-low-bg: #1b2f2a;
+  --risk-low-text: #9ae8c9;
 }
 
 body {
-  @apply bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100;
+  background-color: var(--bg);
+  color: var(--text);
+  @apply antialiased;
 }
 
 @keyframes fade-up {
@@ -61,15 +109,11 @@ body {
 }
 
 .app-background {
-  background-image:
-    radial-gradient(circle at top, rgba(56, 189, 248, 0.12), transparent 55%),
-    radial-gradient(circle at 20% 20%, rgba(99, 102, 241, 0.08), transparent 45%),
-    linear-gradient(180deg, rgba(15, 23, 42, 0.04), transparent 45%);
+  background-color: var(--bg);
+  background-image: none;
 }
 
 .dark .app-background {
-  background-image:
-    radial-gradient(circle at top, rgba(56, 189, 248, 0.18), transparent 55%),
-    radial-gradient(circle at 20% 20%, rgba(99, 102, 241, 0.12), transparent 45%),
-    linear-gradient(180deg, rgba(15, 23, 42, 0.4), transparent 50%);
+  background-color: var(--bg);
+  background-image: none;
 }

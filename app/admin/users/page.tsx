@@ -1,6 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CreateUserForm } from "@/features/admin/components/create-user-form";
-import { AdminNotes } from "@/features/notes/components/admin-notes";
 import { requireAdmin } from "@/lib/auth/guards";
 
 export default async function AdminUsersPage() {
@@ -8,9 +7,9 @@ export default async function AdminUsersPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Card className="transition-transform duration-300 ease-out hover:-translate-y-1">
+      <Card className="transition-transform duration-300 ease-out hover:-translate-y-0.5">
         <CardHeader>
-          <CardTitle className="text-sm uppercase tracking-[0.25em] text-slate-500">
+          <CardTitle className="text-xs uppercase tracking-[0.18em] text-[color:var(--accent)] sm:text-sm">
             Create User
           </CardTitle>
         </CardHeader>
@@ -19,7 +18,6 @@ export default async function AdminUsersPage() {
         </CardContent>
       </Card>
 
-      <AdminNotes pageKey="admin-users" />
     </div>
   );
 }

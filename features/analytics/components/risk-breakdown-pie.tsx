@@ -3,8 +3,9 @@
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
 import type { RiskBreakdown } from "@/lib/analytics/risk";
+import { chartTooltipProps } from "@/features/analytics/components/chart-tooltip";
 
-const COLORS = ["#f87171", "#fbbf24", "#34d399"];
+const COLORS = ["var(--chart-4)", "var(--chart-2)", "var(--chart-1)"];
 
 interface RiskBreakdownPieProps {
   data: RiskBreakdown[];
@@ -13,7 +14,7 @@ interface RiskBreakdownPieProps {
 export function RiskBreakdownPie({ data }: RiskBreakdownPieProps) {
   return (
     <div className="h-56 w-full">
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
         <PieChart>
           <Pie
             data={data}
@@ -27,14 +28,7 @@ export function RiskBreakdownPie({ data }: RiskBreakdownPieProps) {
               <Cell key={`slice-${index}`} fill={COLORS[index % COLORS.length]} />
             ))}
           </Pie>
-          <Tooltip
-            contentStyle={{
-              backgroundColor: "#0f172a",
-              borderRadius: 8,
-              border: "none",
-              color: "#e2e8f0",
-            }}
-          />
+          <Tooltip {...chartTooltipProps} />
         </PieChart>
       </ResponsiveContainer>
     </div>

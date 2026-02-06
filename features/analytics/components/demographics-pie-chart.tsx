@@ -3,8 +3,9 @@
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
 import type { DistributionSlice } from "@/lib/analytics/dashboard";
+import { chartTooltipProps } from "@/features/analytics/components/chart-tooltip";
 
-const COLORS = ["#38bdf8", "#818cf8", "#f59e0b", "#34d399"];
+const COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-5)", "var(--chart-3)"];
 
 interface DemographicsPieChartProps {
   data: DistributionSlice[];
@@ -13,7 +14,7 @@ interface DemographicsPieChartProps {
 export function DemographicsPieChart({ data }: DemographicsPieChartProps) {
   return (
     <div className="h-64 w-full">
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
         <PieChart>
           <Pie
             data={data}
@@ -27,14 +28,7 @@ export function DemographicsPieChart({ data }: DemographicsPieChartProps) {
               <Cell key={`slice-${index}`} fill={COLORS[index % COLORS.length]} />
             ))}
           </Pie>
-          <Tooltip
-            contentStyle={{
-              backgroundColor: "#0f172a",
-              borderRadius: 8,
-              border: "none",
-              color: "#e2e8f0",
-            }}
-          />
+          <Tooltip {...chartTooltipProps} />
         </PieChart>
       </ResponsiveContainer>
     </div>

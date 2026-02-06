@@ -1,16 +1,44 @@
 "use client";
 
-import { Command, Moon, Search, Sun } from "lucide-react";
+import { ChevronDown, ChevronRight, Command, LogOut, Menu, Moon, Search, Sun } from "lucide-react";
+import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useUiStore } from "@/hooks/use-ui-store";
 import { useTheme } from "next-themes";
 import * as React from "react";
+
+type SearchResults = {
+  students: Array<{ id: string; name: string; email: string }>;
+  classes: Array<{ id: string; name: string; gradeLevel: string | null; academicYear: string | null }>;
+};
+
+type AcademicYearOption = {
+  id: string;
+  name: string;
+  terms: Array<{ id: string; name: string }>;
+};
 
 export function AppHeader() {
   const { theme, resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = React.useState(false);
   const [user, setUser] = React.useState<{ displayName?: string; email?: string; role?: string } | null>(null);
+  const { toggleSidebar } = useUiStore();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const [query, setQuery] = React.useState("");
+  const [results, setResults] = React.useState<SearchResults>({ students: [], classes: [] });
+  const [open, setOpen] = React.useState(false);
+  const [isLoading, setIsLoading] = React.useState(false);
+  const searchRef = React.useRef<HTMLDivElement | null>(null);
+  const menuRef = React.useRef<HTMLDivElement | null>(null);
+  const [menuOpen, setMenuOpen] = React.useState(false);
+  const [academicYears, setAcademicYears] = React.useState<AcademicYearOption[]>([]);
+  const [openYearId, setOpenYearId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     setMounted(true);
@@ -27,32 +55,218 @@ export function AppHeader() {
     loadUser();
   }, []);
 
+  React.useEffect(() => {
+    async function loadAcademicYears() {
+      const response = await fetch("/api/academic-years");
+      if (!response.ok) return;
+      const data = await response.json();
+      setAcademicYears(data.years ?? []);
+    }
+
+    loadAcademicYears();
+  }, []);
+
+  const trimmedQuery = query.trim();
+  const totalResults = results.students.length + results.classes.length;
+  const selectedTermId = searchParams.get("term") ?? "";
+  const selectedYearIdParam = searchParams.get("year") ?? "";
+  const selectedYear =
+    academicYears.find((year) => year.id === selectedYearIdParam) ??
+    academicYears.find((year) => year.terms.some((term) => term.id === selectedTermId));
+  const selectedTerm = selectedYear?.terms.find((term) => term.id === selectedTermId);
+  const selectedTermLabel = selectedTerm
+    ? `${selectedTerm.name}`
+    : selectedYear
+      ? `${selectedYear.name}`
+      : "Select term";
+  const termQuery = selectedTermId ? `?term=${selectedTermId}` : "";
+
+  React.useEffect(() => {
+    function handleClick(event: MouseEvent) {
+      const target = event.target as Node;
+      if (searchRef.current && !searchRef.current.contains(target)) {
+        setOpen(false);
+      }
+      if (menuRef.current && !menuRef.current.contains(target)) {
+        setMenuOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
+
+  React.useEffect(() => {
+    if (trimmedQuery.length < 2) {
+      setResults({ students: [], classes: [] });
+      setIsLoading(false);
+      setOpen(false);
+      return;
+    }
+
+    setIsLoading(true);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      try {
+        const response = await fetch(`/api/search?q=${encodeURIComponent(trimmedQuery)}`, {
+          signal: controller.signal,
+        });
+        if (!response.ok) {
+          setResults({ students: [], classes: [] });
+          setOpen(true);
+          return;
+        }
+        const data = (await response.json()) as SearchResults;
+        setResults(data);
+        setOpen(true);
+      } catch (error) {
+        if ((error as Error).name !== "AbortError") {
+          setResults({ students: [], classes: [] });
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    }, 250);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeout);
+    };
+  }, [trimmedQuery]);
+
+  React.useEffect(() => {
+    if (!menuOpen) return;
+    if (selectedYear?.id) {
+      setOpenYearId(selectedYear.id);
+    } else if (academicYears[0]?.id) {
+      setOpenYearId(academicYears[0].id);
+    }
+  }, [menuOpen, selectedYear?.id, academicYears]);
+
+  const handleSelectTerm = React.useCallback(
+    (termId: string, yearId?: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("term", termId);
+      if (yearId) {
+        params.set("year", yearId);
+      }
+      params.delete("page");
+      const query = params.toString();
+      router.push(query ? `${pathname}?${query}` : pathname);
+      setMenuOpen(false);
+    },
+    [pathname, router, searchParams]
+  );
+
   const currentTheme = resolvedTheme ?? theme;
   const nextTheme = currentTheme === "dark" ? "light" : "dark";
 
   return (
-    <header className="flex items-center justify-between gap-4 border-b border-slate-200/80 bg-white/75 px-6 py-4 backdrop-blur-xl shadow-[0_20px_40px_-35px_rgba(15,23,42,0.45)] dark:border-slate-800/70 dark:bg-slate-950/70">
-      <div className="flex items-center gap-3 text-sm font-semibold uppercase tracking-[0.25em] text-slate-500">
+    <header className="sticky top-0 z-20 grid grid-cols-1 items-center gap-3 border-b border-[color:var(--border)] bg-[color:var(--surface)] px-4 py-3 shadow-[0_12px_30px_-24px_rgba(28,36,48,0.35)] dark:shadow-[0_18px_40px_-30px_rgba(0,0,0,0.7)] sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:gap-4 sm:px-6 sm:py-4">
+      <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.22em] text-[color:var(--accent)] sm:text-sm">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={toggleSidebar}
+          className="md:hidden"
+          aria-label="Toggle navigation"
+        >
+          <Menu className="h-4 w-4" />
+        </Button>
         School Analytics
       </div>
-      <div className="flex flex-1 items-center justify-center">
-        <div className="relative w-full max-w-xl">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+      <div className="flex items-center justify-center sm:px-2">
+        <div ref={searchRef} className="relative w-full max-w-none sm:max-w-xl">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--text-muted)]" />
           <Input
-            placeholder="Search students, classes, staff..."
-            className="pl-10 bg-white/80 shadow-[inset_0_0_0_1px_rgba(148,163,184,0.25)] focus-visible:ring-sky-400 dark:bg-slate-950/70"
+            placeholder="Search students or classes..."
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onFocus={() => {
+              if (trimmedQuery.length >= 2) setOpen(true);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                setOpen(false);
+              }
+              if (event.key === "Enter" && trimmedQuery.length > 0) {
+                event.preventDefault();
+                const params = new URLSearchParams();
+                params.set("q", trimmedQuery);
+                if (selectedTermId) {
+                  params.set("term", selectedTermId);
+                }
+                router.push(`/students?${params.toString()}`);
+                setOpen(false);
+              }
+            }}
+            className="pl-10 bg-[color:var(--surface)] text-sm focus-visible:ring-[color:var(--accent)]"
           />
-          <div className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 items-center gap-1 text-xs text-slate-400 md:flex">
+          <div className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 items-center gap-1 text-xs text-[color:var(--text-muted)] md:flex">
             <Command className="h-3 w-3" />K
           </div>
+          {open ? (
+            <div className="absolute left-0 right-0 top-full z-20 mt-2 rounded-xl border border-[color:var(--border)] bg-[color:var(--surface)] p-2 shadow-[0_18px_40px_-28px_rgba(10,20,40,0.55)]">
+              {isLoading ? (
+                <div className="px-3 py-2 text-xs text-[color:var(--text-muted)]">Searching...</div>
+              ) : totalResults === 0 ? (
+                <div className="px-3 py-2 text-xs text-[color:var(--text-muted)]">
+                  No matches for &quot;{trimmedQuery}&quot;.
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {results.students.length ? (
+                    <div>
+                      <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--text-muted)]">
+                        Students
+                      </div>
+                      <div className="flex flex-col">
+                        {results.students.map((student) => (
+                          <Link
+                            key={student.id}
+                            href={`/students/${student.id}${termQuery}`}
+                            onClick={() => setOpen(false)}
+                            className="rounded-lg px-2 py-2 text-sm text-[color:var(--text)] transition-colors hover:bg-[color:var(--surface-strong)]"
+                          >
+                            <div className="font-medium">{student.name}</div>
+                            <div className="text-xs text-[color:var(--text-muted)]">{student.email}</div>
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                  {results.classes.length ? (
+                    <div>
+                      <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--text-muted)]">
+                        Classes
+                      </div>
+                      <div className="flex flex-col">
+                        {results.classes.map((cls) => (
+                          <Link
+                            key={cls.id}
+                            href={`/classes/${cls.id}${termQuery}`}
+                            onClick={() => setOpen(false)}
+                            className="rounded-lg px-2 py-2 text-sm text-[color:var(--text)] transition-colors hover:bg-[color:var(--surface-strong)]"
+                          >
+                            <div className="font-medium">{cls.name}</div>
+                            <div className="text-xs text-[color:var(--text-muted)]">
+                              {[cls.gradeLevel, cls.academicYear].filter(Boolean).join(" • ")}
+                            </div>
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+              <div className="mt-2 border-t border-[color:var(--border)] px-3 pt-2 text-[10px] uppercase tracking-[0.2em] text-[color:var(--text-muted)]">
+                Press Enter to search students
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
-      <div className="flex items-center gap-2">
-        <form action="/api/auth/logout" method="post">
-          <Button variant="outline" size="sm" type="submit">
-            Log out
-          </Button>
-        </form>
+      <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end">
         <Button
           variant="outline"
           size="icon"
@@ -68,13 +282,116 @@ export function AppHeader() {
             <span className="h-4 w-4" />
           )}
         </Button>
-        <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-100/60 px-3 py-1 text-xs font-medium text-slate-700 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-200">
-          <span className="h-2 w-2 rounded-full bg-emerald-500" />
-          {user?.displayName ?? user?.email ?? "User"}
-          {user?.role ? (
-            <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[10px] uppercase text-slate-600 dark:bg-slate-800 dark:text-slate-200">
-              {user.role}
+        <div ref={menuRef} className="relative">
+          <button
+            type="button"
+            onClick={() => setMenuOpen((prev) => !prev)}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            className="flex items-center gap-2 rounded-full border border-[color:var(--border)] bg-[color:var(--surface-strong)] px-3 py-1 text-xs font-medium text-[color:var(--text)]"
+          >
+            <span className="h-2 w-2 rounded-full bg-[color:var(--accent)]" />
+            <span>{user?.displayName ?? user?.email ?? "User"}</span>
+            {user?.role ? (
+              <span className="rounded-full bg-[color:var(--surface)] px-2 py-0.5 text-[10px] uppercase text-[color:var(--accent)]">
+                {user.role}
+              </span>
+            ) : null}
+            <span className="hidden text-[10px] uppercase tracking-[0.16em] text-[color:var(--text-muted)] sm:inline">
+              {selectedTermLabel}
             </span>
+            <ChevronDown className="h-3.5 w-3.5 text-[color:var(--text-muted)]" />
+          </button>
+          {menuOpen ? (
+            <div className="absolute right-0 top-full z-30 mt-2 w-72 rounded-xl border border-[color:var(--border)] bg-[color:var(--surface)] p-2 shadow-[0_18px_40px_-28px_rgba(10,20,40,0.55)]">
+              <div className="px-2 py-2">
+                <div className="text-sm font-semibold text-[color:var(--text)]">
+                  {user?.displayName ?? "User"}
+                </div>
+                <div className="text-xs text-[color:var(--text-muted)]">{user?.email ?? ""}</div>
+              </div>
+              <div className="border-t border-[color:var(--border)] px-2 py-2">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--text-muted)]">
+                  Academic Year
+                </div>
+                <div className="mt-2 flex flex-col gap-1">
+                  {academicYears.length === 0 ? (
+                    <div className="px-2 py-2 text-xs text-[color:var(--text-muted)]">
+                      No years available.
+                    </div>
+                  ) : (
+                    academicYears.map((year) => {
+                      const isOpen = openYearId === year.id;
+                      return (
+                        <div key={year.id} className="rounded-lg border border-transparent">
+                          <button
+                            type="button"
+                            onClick={() => setOpenYearId(isOpen ? null : year.id)}
+                            className={`flex w-full items-center justify-between rounded-lg px-2 py-2 text-xs font-semibold uppercase tracking-[0.14em] ${
+                              selectedYear?.id === year.id
+                                ? "bg-[color:var(--surface-strong)] text-[color:var(--text)]"
+                                : "text-[color:var(--text-muted)] hover:bg-[color:var(--surface-strong)] hover:text-[color:var(--text)]"
+                            }`}
+                          >
+                            <span>{year.name}</span>
+                            <ChevronRight
+                              className={`h-3.5 w-3.5 transition-transform ${isOpen ? "rotate-90" : ""}`}
+                            />
+                          </button>
+                          {isOpen ? (
+                            <div className="mt-1 flex flex-col gap-1 pl-3">
+                              {year.terms.map((term) => {
+                                const isSelected = term.id === selectedTermId;
+                                return (
+                                  <button
+                                    key={term.id}
+                                    type="button"
+                                    onClick={() => handleSelectTerm(term.id, year.id)}
+                                    className={`flex w-full items-center justify-between rounded-md px-2 py-1 text-xs ${
+                                      isSelected
+                                        ? "bg-[color:var(--accent-2)] text-[color:var(--text)]"
+                                        : "text-[color:var(--text)] hover:bg-[color:var(--surface-strong)]"
+                                    }`}
+                                  >
+                                    <span>{term.name}</span>
+                                    {isSelected ? (
+                                      <span className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
+                                        Selected
+                                      </span>
+                                    ) : null}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+              <div className="border-t border-[color:var(--border)] px-2 py-2">
+                <div className="flex flex-col gap-2">
+                  {user?.role === "ADMIN" ? (
+                    <Link
+                      href="/admin/users"
+                      className="flex items-center justify-between rounded-md border border-[color:var(--border)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--text)] hover:bg-[color:var(--surface-strong)]"
+                    >
+                      Admin Console
+                    </Link>
+                  ) : null}
+                  <form action="/api/auth/logout" method="post" className="w-full">
+                    <button
+                      type="submit"
+                      className="flex w-full items-center justify-between rounded-md border border-[color:var(--border)] px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--text)] hover:bg-[color:var(--surface-strong)]"
+                    >
+                      <span>Log out</span>
+                      <LogOut className="h-3.5 w-3.5" />
+                    </button>
+                  </form>
+                </div>
+              </div>
+            </div>
           ) : null}
         </div>
       </div>

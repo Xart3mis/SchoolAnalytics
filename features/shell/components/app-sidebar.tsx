@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { GraduationCap, Home, Layers, Users } from "lucide-react";
 import { usePathname } from "next/navigation";
-import * as React from "react";
 
 import { Button } from "@/components/ui/button";
 import { useUiStore } from "@/hooks/use-ui-store";
@@ -19,28 +18,16 @@ const navItems = [
 export function AppSidebar() {
   const { sidebarOpen, toggleSidebar } = useUiStore();
   const pathname = usePathname();
-  const [role, setRole] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    async function loadUser() {
-      const response = await fetch("/api/auth/me");
-      if (!response.ok) return;
-      const data = await response.json();
-      setRole(data.user?.role ?? null);
-    }
-
-    loadUser();
-  }, []);
 
   return (
     <aside
       className={cn(
-        "flex h-full flex-col border-r border-slate-200/70 bg-white/70 px-4 py-6 backdrop-blur-xl transition-all duration-300 dark:border-slate-800/70 dark:bg-slate-950/70",
-        sidebarOpen ? "w-64" : "w-20"
+        "fixed inset-y-0 left-0 z-30 flex h-dvh w-72 flex-col overflow-y-auto border-r border-[color:var(--border)] bg-[color:var(--surface)] px-4 py-5 transition-transform duration-300 md:static md:z-0 md:h-screen md:translate-x-0 md:transition-[width] md:duration-300",
+        sidebarOpen ? "translate-x-0 md:w-64" : "-translate-x-full md:w-20"
       )}
     >
       <div className="flex items-center justify-between">
-        <div className="text-xs font-semibold uppercase tracking-[0.3em] text-slate-500">
+        <div className="text-xs font-semibold uppercase tracking-[0.26em] text-[color:var(--accent)]">
           {sidebarOpen ? "Navigator" : "Nav"}
         </div>
         <Button variant="ghost" size="icon" onClick={toggleSidebar}>
@@ -61,8 +48,8 @@ export function AppSidebar() {
               className={cn(
                 "flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors",
                 isActive
-                  ? "bg-gradient-to-r from-sky-100/80 via-white/60 to-transparent text-slate-900 shadow-[inset_0_0_0_1px_rgba(148,163,184,0.3)] dark:from-sky-900/30 dark:via-slate-950/40 dark:text-slate-50"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-50",
+                  ? "bg-[color:var(--surface-strong)] text-[color:var(--text)] shadow-[inset_0_0_0_1px_rgba(31,63,118,0.18)] dark:shadow-[inset_0_0_0_1px_rgba(107,143,216,0.22)]"
+                  : "text-[color:var(--text-muted)] hover:bg-[color:var(--surface-strong)] hover:text-[color:var(--text)]",
                 sidebarOpen ? "justify-start" : "justify-center"
               )}
             >
@@ -71,23 +58,8 @@ export function AppSidebar() {
             </Link>
           );
         })}
-        {role === "ADMIN" ? (
-          <Link
-            href="/admin/users"
-            className={cn(
-              "flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors",
-              pathname.startsWith("/admin")
-                ? "bg-gradient-to-r from-emerald-100/70 via-white/60 to-transparent text-slate-900 shadow-[inset_0_0_0_1px_rgba(148,163,184,0.3)] dark:from-emerald-900/30 dark:via-slate-950/40 dark:text-slate-50"
-                : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-50",
-              sidebarOpen ? "justify-start" : "justify-center"
-            )}
-          >
-            <span className="text-xs font-semibold">ADM</span>
-            {sidebarOpen && <span>Admin</span>}
-          </Link>
-        ) : null}
       </nav>
-      <div className="rounded-lg border border-slate-200 bg-slate-100/70 p-3 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-300">
+      <div className="mt-4 rounded-lg border border-[color:var(--border)] bg-[color:var(--surface-strong)] p-3 text-[11px] text-[color:var(--text-muted)]">
         {sidebarOpen ? "Updated 5m ago" : "5m"}
       </div>
     </aside>
