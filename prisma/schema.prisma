@@ -6,33 +6,79 @@ datasource db {
   provider = "postgresql"
 }
 
-enum Role {
-  USER
+// -----------------------------------------------------------------------------
+// CORE IDENTITY & ORGANIZATION
+// -----------------------------------------------------------------------------
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  students      Student[]
+  staff         Staff[]
+  academicYears AcademicYear[]
+  courses       Course[]
+  classSections ClassSection[]
+  users         User[]
+}
+
+model SourceSystem {
+  id         String    @id @default(uuid())
+  name       String    @unique // "Toddle", "IXL", "OneRoster"
+  config     Json? // API keys, endpoints (encrypted if sensitive)
+  lastSyncAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  externalIdentifiers ExternalIdentifier[]
+}
+
+// Crosswalk table to link Internal IDs to External Source IDs
+model ExternalIdentifier {
+  id             String       @id @default(uuid())
+  entityType     String // "Student", "Staff", "ClassSection", etc.
+  entityId       String // The internal UUID of the entity
+  sourceSystem   SourceSystem @relation(fields: [sourceSystemId], references: [id])
+  sourceSystemId String
+  sourceId       String // The ID in the external system (e.g., Toddle ID, IXL User ID)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([sourceSystemId, sourceId, entityType])
+  @@index([entityId, entityType])
+}
+
+enum UserRole {
+  STUDENT
+  TEACHER
   ADMIN
-}
-
-enum Trimester {
-  T1
-  T2
-  T3
-}
-
-enum RiskLevel {
-  LOW
-  MEDIUM
-  HIGH
+  PARENT
+  USER // Fallback for existing schema compatibility
 }
 
 model User {
-  id           String      @id @default(cuid())
-  email        String      @unique
-  passwordHash String
-  role         Role        @default(USER)
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String? // Optional if using SSO
+  role         UserRole @default(USER)
   displayName  String?
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-  sessions     Session[]
-  adminNotes   AdminNote[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Multi-tenancy
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  organizationId String?
+
+  // Profile Links
+  studentProfile Student?
+  staffProfile   Staff?
+
+  // Existing schema compatibility
+  sessions   Session[]
+  adminNotes AdminNote[]
 }
 
 model Session {
@@ -45,106 +91,434 @@ model Session {
 }
 
 model Student {
-  id             String                      @id @default(cuid())
-  externalId     String?                     @unique
-  fullName       String
-  gradeLevel     Int
-  createdAt      DateTime                    @default(now())
-  updatedAt      DateTime                    @updatedAt
-  enrollments    StudentClassEnrollment[]
-  subjectScores  StudentSubjectTermScore[]
-  termSummaries  StudentTermSummary[]
+  id             String       @id @default(uuid())
+  user           User         @relation(fields: [userId], references: [id])
+  userId         String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+
+  // Demographics
+  firstName String?
+  lastName  String?
+  dob       DateTime?
+  gender    String?
+
+  // Flexible Data
+  customFields  Json? // Toddle custom fields
+  rawSourceData Json? // Full raw payload from sync
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relationships
+  families       FamilyMember[]
+  enrollments    Enrollment[]
+  attendance     AttendanceRecord[]
+  behavior       BehaviorIncident[]
+  gradeEntries   GradeEntry[]
+  ixlDiagnostics IXLDiagnosticSnapshot[]
+  ixlSkillUsage  IXLSkillUsage[]
+  ixlSkillPlans  StudentSkillPlanProgress[]
 }
 
-model Class {
-  id            String                      @id @default(cuid())
-  name          String
-  gradeLevel    Int
-  academicYear  String
-  createdAt     DateTime                    @default(now())
-  updatedAt     DateTime                    @updatedAt
-  enrollments   StudentClassEnrollment[]
-  subjectScores StudentSubjectTermScore[]
+model Staff {
+  id             String       @id @default(uuid())
+  user           User         @relation(fields: [userId], references: [id])
+  userId         String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
 
-  @@index([academicYear, gradeLevel])
+  jobTitle String?
+  isAdmin  Boolean @default(false)
+
+  rawSourceData Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relationships
+  classSections     ClassSection[] // Primary teacher
+  enrollments       Enrollment[] // Co-teachers/support
+  reportedIncidents BehaviorIncident[]
 }
 
-model Subject {
-  id            String                      @id @default(cuid())
-  code          String
-  name          String
-  createdAt     DateTime                    @default(now())
-  updatedAt     DateTime                    @updatedAt
-  subjectScores StudentSubjectTermScore[]
+model Family {
+  id   String  @id @default(uuid())
+  name String? // e.g. "The Smith Family"
 
-  @@unique([code])
+  rawSourceData Json?
+
+  members   FamilyMember[]
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
 }
 
-model Term {
-  id             String                      @id @default(cuid())
-  academicYear   String
-  trimester      Trimester
-  startDate      DateTime?
-  endDate        DateTime?
-  createdAt      DateTime                    @default(now())
-  updatedAt      DateTime                    @updatedAt
-  subjectScores  StudentSubjectTermScore[]
-  studentSummaries StudentTermSummary[]
-
-  @@unique([academicYear, trimester])
-}
-
-model StudentClassEnrollment {
-  id        String   @id @default(cuid())
+model FamilyMember {
+  id        String  @id @default(uuid())
+  family    Family  @relation(fields: [familyId], references: [id])
+  familyId  String
+  student   Student @relation(fields: [studentId], references: [id])
   studentId String
-  classId   String
+
+  relationship String // "Father", "Mother", "Guardian"
+  isPrimary    Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([familyId, studentId])
+}
+
+// -----------------------------------------------------------------------------
+// ACADEMIC STRUCTURE
+// -----------------------------------------------------------------------------
+
+model AcademicYear {
+  id             String       @id @default(uuid())
+  name           String // "2023-2024"
+  startDate      DateTime
+  endDate        DateTime
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+
+  terms         AcademicTerm[]
+  classSections ClassSection[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AcademicTerm {
+  id             String       @id @default(uuid())
+  name           String // "Semester 1", "Term 2"
+  startDate      DateTime
+  endDate        DateTime
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id])
+  academicYearId String
+
+  gradingPeriods GradingPeriod[]
+  classSections  ClassSection[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model GradingPeriod {
+  id             String       @id @default(uuid())
+  name           String
+  academicTerm   AcademicTerm @relation(fields: [academicTermId], references: [id])
+  academicTermId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Curriculum {
+  id          String  @id @default(uuid())
+  name        String // "IB MYP", "Common Core"
+  description String?
+
+  courses Course[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model GradeLevel {
+  id   String @id @default(uuid())
+  name String // "Grade 5", "Year 6"
+
+  courses Course[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Course {
+  id             String       @id @default(uuid())
+  name           String // "Mathematics 101"
+  code           String?
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+
+  curriculum   Curriculum? @relation(fields: [curriculumId], references: [id])
+  curriculumId String?
+  gradeLevel   GradeLevel? @relation(fields: [gradeLevelId], references: [id])
+  gradeLevelId String?
+
+  classSections ClassSection[]
+  ixlSkillPlans IXLSkillPlan[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ClassSection {
+  id             String       @id @default(uuid())
+  name           String // "Math 101 - Section A"
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  organizationId String
+
+  course   Course @relation(fields: [courseId], references: [id])
+  courseId String
+
+  academicYear   AcademicYear  @relation(fields: [academicYearId], references: [id])
+  academicYearId String
+  academicTerm   AcademicTerm? @relation(fields: [academicTermId], references: [id])
+  academicTermId String?
+
+  primaryTeacher Staff?  @relation(fields: [staffId], references: [id])
+  staffId        String?
+
+  enrollments    Enrollment[]
+  assignments    Assignment[]
+  attendance     AttendanceRecord[]
+  timetableSlots TimetableSlot[]
+
+  rawSourceData Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum EnrollmentRole {
+  STUDENT
+  TEACHER
+  OBSERVER
+}
+
+model Enrollment {
+  id             String       @id @default(uuid())
+  classSection   ClassSection @relation(fields: [classSectionId], references: [id])
+  classSectionId String
+
+  // Polymorphic-ish relation (can be Student or Staff)
+  student   Student? @relation(fields: [studentId], references: [id])
+  studentId String?
+  staff     Staff?   @relation(fields: [staffId], references: [id])
+  staffId   String?
+
+  role      EnrollmentRole
   startDate DateTime?
   endDate   DateTime?
+
   createdAt DateTime @default(now())
-  student   Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  class     Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  updatedAt DateTime @updatedAt
 
-  @@unique([studentId, classId])
-  @@index([classId])
+  @@unique([classSectionId, studentId]) // Ensure unique enrollment per student per class
 }
 
-model StudentSubjectTermScore {
-  id          String   @id @default(cuid())
-  studentId   String
-  classId     String
-  subjectId   String
-  termId      String
-  criterionA  Int
-  criterionB  Int
-  criterionC  Int
-  criterionD  Int
-  overallScore Float?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  class       Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
-  subject     Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  term        Term     @relation(fields: [termId], references: [id], onDelete: Cascade)
+// -----------------------------------------------------------------------------
+// OPERATIONS (TODDLE)
+// -----------------------------------------------------------------------------
 
-  @@unique([studentId, subjectId, termId])
-  @@index([classId, subjectId, termId])
-  @@index([studentId, termId])
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
 }
 
-model StudentTermSummary {
-  id           String    @id @default(cuid())
+model AttendanceRecord {
+  id             String        @id @default(uuid())
+  student        Student       @relation(fields: [studentId], references: [id])
+  studentId      String
+  classSection   ClassSection? @relation(fields: [classSectionId], references: [id]) // If class-based
+  classSectionId String?
+
+  date    DateTime         @db.Date
+  status  AttendanceStatus
+  code    String? // Specific code from Toddle (e.g., "Illness")
+  comment String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([studentId, date])
+}
+
+enum BehaviorSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+model BehaviorIncident {
+  id         String  @id @default(uuid())
+  student    Student @relation(fields: [studentId], references: [id])
+  studentId  String
+  reportedBy Staff?  @relation(fields: [staffId], references: [id])
+  staffId    String?
+
+  title        String
+  description  String?
+  severity     BehaviorSeverity @default(LOW)
+  incidentDate DateTime
+
+  rawSourceData Json? // Store categories, actions taken
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model TimetableSlot {
+  id             String       @id @default(uuid())
+  classSection   ClassSection @relation(fields: [classSectionId], references: [id])
+  classSectionId String
+
+  day       String // "Monday", "Day 1"
+  startTime String // "09:00"
+  endTime   String // "10:00"
+  location  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// -----------------------------------------------------------------------------
+// LEARNING & GRADING (TODDLE)
+// -----------------------------------------------------------------------------
+
+enum AssignmentType {
+  FORMATIVE
+  SUMMATIVE
+  PROJECT
+  HOMEWORK
+}
+
+enum MypCriterion {
+  A
+  B
+  C
+  D
+}
+
+model Assignment {
+  id             String       @id @default(uuid())
+  classSection   ClassSection @relation(fields: [classSectionId], references: [id])
+  classSectionId String
+
+  title       String
+  description String?
+  type        AssignmentType?
+  dueDate     DateTime?
+  maxScore    Float?
+
+  grades GradeEntry[]
+
+  rawSourceData Json? // Rubrics, specific tool data
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model GradeEntry {
+  id           String     @id @default(uuid())
+  student      Student    @relation(fields: [studentId], references: [id])
   studentId    String
-  termId       String
-  overallScore Float?
-  riskLevel    RiskLevel?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  student      Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
-  term         Term      @relation(fields: [termId], references: [id], onDelete: Cascade)
+  assignment   Assignment @relation(fields: [assignmentId], references: [id])
+  assignmentId String
 
-  @@unique([studentId, termId])
-  @@index([termId])
+  score    Float?
+  grade    String? // Letter grade or level
+  feedback String?
+
+  criteriaScores GradeEntryCriterion[]
+
+  isSubmitted Boolean   @default(false)
+  submittedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([studentId, assignmentId])
 }
+
+model GradeEntryCriterion {
+  id           String       @id @default(uuid())
+  gradeEntry   GradeEntry   @relation(fields: [gradeEntryId], references: [id], onDelete: Cascade)
+  gradeEntryId String
+
+  criterion MypCriterion
+  score     Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([gradeEntryId, criterion])
+  @@index([gradeEntryId])
+}
+
+// -----------------------------------------------------------------------------
+// IXL SPECIFIC MODULE
+// -----------------------------------------------------------------------------
+
+model IXLSkillPlan {
+  id      String  @id @default(uuid())
+  title   String
+  subject String?
+
+  course   Course? @relation(fields: [courseId], references: [id])
+  courseId String?
+
+  rawSourceData Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  studentProgress StudentSkillPlanProgress[]
+}
+
+model StudentSkillPlanProgress {
+  id          String       @id @default(uuid())
+  student     Student      @relation(fields: [studentId], references: [id])
+  studentId   String
+  skillPlan   IXLSkillPlan @relation(fields: [skillPlanId], references: [id])
+  skillPlanId String
+
+  skillsMastered Int @default(0)
+  totalSkills    Int @default(0)
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([studentId, skillPlanId])
+}
+
+model IXLDiagnosticSnapshot {
+  id        String  @id @default(uuid())
+  student   Student @relation(fields: [studentId], references: [id])
+  studentId String
+
+  subject        String // "Math", "Language Arts"
+  scoreRangeLow  Int
+  scoreRangeHigh Int
+  snapshotDate   DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model IXLSkillUsage {
+  id        String  @id @default(uuid())
+  student   Student @relation(fields: [studentId], references: [id])
+  studentId String
+
+  skillCode         String
+  questionsAnswered Int
+  timeSpentSeconds  Int
+  smartScore        Int
+  lastPracticed     DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([studentId, skillCode])
+}
+
+// -----------------------------------------------------------------------------
+// LEGACY / ADMIN
+// -----------------------------------------------------------------------------
 
 model AdminNote {
   id        String   @id @default(cuid())
