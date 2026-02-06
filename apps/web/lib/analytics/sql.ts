@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma } from "@school-analytics/db/client";
 
 import { CRITERION_SCORE_SCALE } from "@/lib/analytics/config";
 

@@ -6,7 +6,7 @@ import { StatTiles } from "@/features/analytics/components/stat-tiles";
 import { getActiveTerm, getActiveTermForYear } from "@/lib/analytics/terms";
 import { requireSession } from "@/lib/auth/guards";
 import { prisma } from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
+import { Prisma } from "@school-analytics/db/client";
 
 interface GradesPageProps {
   searchParams?: Promise<{ q?: string; term?: string; year?: string }>;

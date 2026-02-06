@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma } from "@school-analytics/db/client";
 
 import { RISK_THRESHOLDS } from "@/lib/analytics/config";
 import { mypCriteriaTotalSql, mypFinalGradeSql } from "@/lib/analytics/sql";
