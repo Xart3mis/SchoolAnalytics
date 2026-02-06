@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { getSessionFromCookies } from "@/lib/auth/session";
 import { mypCriteriaTotalSql, mypFinalGradeSql } from "@/lib/analytics/sql";
 import { prisma } from "@/lib/prisma";
-import { Prisma } from "@prisma/client";
+import { Prisma } from "@school-analytics/db/client";
 
 function toCsvRow(values: Array<string | number>) {
   return values

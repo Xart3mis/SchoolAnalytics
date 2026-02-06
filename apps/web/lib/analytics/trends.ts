@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma } from "@school-analytics/db/client";
 
 import { mypCriteriaTotalSql, mypFinalGradeSql } from "@/lib/analytics/sql";
 import { prisma } from "@/lib/prisma";

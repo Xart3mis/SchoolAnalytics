@@ -1,9 +1,13 @@
 /* eslint-disable no-console */
-require("dotenv/config");
+const path = require("path");
+const dotenv = require("dotenv");
+
+dotenv.config({ path: path.resolve(__dirname, "../../../.env"), quiet: true });
+dotenv.config({ quiet: true });
 
 const { randomUUID } = require("crypto");
 const bcrypt = require("bcryptjs");
-const { PrismaClient } = require("@prisma/client");
+const { PrismaClient } = require("../src/generated/client");
 const { PrismaPg } = require("@prisma/adapter-pg");
 const pg = require("pg");
 
