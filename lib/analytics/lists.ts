@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 
 import { RISK_THRESHOLDS } from "@/lib/analytics/config";
-import { weightedScoreSql } from "@/lib/analytics/sql";
+import { mypCriteriaTotalSql, mypFinalGradeSql } from "@/lib/analytics/sql";
 import { prisma } from "@/lib/prisma";
 
 export type StudentListRow = {
@@ -10,6 +10,13 @@ export type StudentListRow = {
   gradeLevel: number;
   averageScore: number;
   riskLevel: "High" | "Medium" | "Low";
+};
+
+export type ClassListRow = {
+  id: string;
+  name: string;
+  gradeLevel: number;
+  academicYear: string;
 };
 
 function riskLevel(score: number) {
@@ -30,33 +37,75 @@ export async function getStudentList({
   query?: string;
 }) {
   const offset = (page - 1) * pageSize;
-  const scoreExpression = weightedScoreSql();
+  const totalExpression = mypCriteriaTotalSql();
+  const finalGradeExpression = mypFinalGradeSql(totalExpression);
   const search = query?.trim();
   const searchClause = search
-    ? Prisma.sql`AND LOWER(s."fullName") LIKE ${`%${search.toLowerCase()}%`}`
+    ? Prisma.sql`AND LOWER(COALESCE(u."displayName", CONCAT_WS(' ', s."firstName", s."lastName"), u."email")) LIKE ${`%${search.toLowerCase()}%`}`
     : Prisma.empty;
 
   const rows = await prisma.$queryRaw<
     Array<{ id: string; fullName: string; gradeLevel: number; averageScore: number }>
   >(Prisma.sql`
+    WITH final_grades AS (
+      SELECT ge."studentId",
+             cs."courseId" AS "courseId",
+             ${finalGradeExpression}::int AS "finalGrade"
+      FROM "GradeEntry" ge
+      JOIN "GradeEntryCriterion" gec ON gec."gradeEntryId" = ge."id"
+      JOIN "Assignment" a ON a."id" = ge."assignmentId"
+      JOIN "ClassSection" cs ON cs."id" = a."classSectionId"
+      WHERE cs."academicTermId" = ${termId}
+      GROUP BY ge."studentId", cs."courseId"
+    ),
+    student_stats AS (
+      SELECT "studentId", AVG("finalGrade")::float AS "avgGrade"
+      FROM final_grades
+      GROUP BY "studentId"
+    ),
+    grade_levels AS (
+      SELECT final_grades."studentId", MIN(gl."name")::int AS "gradeLevel"
+      FROM final_grades
+      JOIN "Course" c ON c."id" = final_grades."courseId"
+      JOIN "GradeLevel" gl ON gl."id" = c."gradeLevelId"
+      GROUP BY final_grades."studentId"
+    )
     SELECT s."id",
-           s."fullName",
-           s."gradeLevel",
-           AVG(${scoreExpression})::float AS "averageScore"
-    FROM "StudentSubjectTermScore" st
-    JOIN "Student" s ON s."id" = st."studentId"
-    WHERE st."termId" = ${termId}
+           COALESCE(u."displayName", CONCAT_WS(' ', s."firstName", s."lastName"), u."email") AS "fullName",
+           grade_levels."gradeLevel" AS "gradeLevel",
+           student_stats."avgGrade"::float AS "averageScore"
+    FROM student_stats
+    JOIN grade_levels ON grade_levels."studentId" = student_stats."studentId"
+    JOIN "Student" s ON s."id" = student_stats."studentId"
+    JOIN "User" u ON u."id" = s."userId"
+    WHERE 1 = 1
     ${searchClause}
-    GROUP BY s."id"
     ORDER BY "averageScore" ASC
     LIMIT ${pageSize} OFFSET ${offset}
   `);
 
   const total = await prisma.$queryRaw<{ count: number }[]>(Prisma.sql`
-    SELECT COUNT(DISTINCT st."studentId")::int AS count
-    FROM "StudentSubjectTermScore" st
-    JOIN "Student" s ON s."id" = st."studentId"
-    WHERE st."termId" = ${termId}
+    WITH final_grades AS (
+      SELECT ge."studentId",
+             cs."courseId" AS "courseId",
+             ${finalGradeExpression}::int AS "finalGrade"
+      FROM "GradeEntry" ge
+      JOIN "GradeEntryCriterion" gec ON gec."gradeEntryId" = ge."id"
+      JOIN "Assignment" a ON a."id" = ge."assignmentId"
+      JOIN "ClassSection" cs ON cs."id" = a."classSectionId"
+      WHERE cs."academicTermId" = ${termId}
+      GROUP BY ge."studentId", cs."courseId"
+    ),
+    student_stats AS (
+      SELECT "studentId", AVG("finalGrade")::float AS "avgGrade"
+      FROM final_grades
+      GROUP BY "studentId"
+    )
+    SELECT COUNT(*)::int AS count
+    FROM student_stats
+    JOIN "Student" s ON s."id" = student_stats."studentId"
+    JOIN "User" u ON u."id" = s."userId"
+    WHERE 1 = 1
     ${searchClause}
   `);
 
@@ -70,9 +119,26 @@ export async function getStudentList({
   };
 }
 
-export async function getClassList(academicYear: string) {
-  return prisma.class.findMany({
-    where: { academicYear },
-    orderBy: [{ gradeLevel: "asc" }, { name: "asc" }],
-  });
+export async function getClassList(termId: string, query?: string) {
+  const search = query?.trim();
+  const searchClause = search
+    ? Prisma.sql`AND (
+        LOWER(cs."name") LIKE ${`%${search.toLowerCase()}%`}
+        OR LOWER(c."name") LIKE ${`%${search.toLowerCase()}%`}
+      )`
+    : Prisma.empty;
+
+  return prisma.$queryRaw<ClassListRow[]>(Prisma.sql`
+    SELECT cs."id",
+           cs."name",
+           gl."name"::int AS "gradeLevel",
+           ay."name" AS "academicYear"
+    FROM "ClassSection" cs
+    JOIN "Course" c ON c."id" = cs."courseId"
+    JOIN "GradeLevel" gl ON gl."id" = c."gradeLevelId"
+    JOIN "AcademicYear" ay ON ay."id" = cs."academicYearId"
+    WHERE cs."academicTermId" = ${termId}
+    ${searchClause}
+    ORDER BY gl."name"::int ASC, cs."name" ASC
+  `);
 }
