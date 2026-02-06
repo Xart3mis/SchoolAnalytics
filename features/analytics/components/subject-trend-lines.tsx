@@ -10,9 +10,17 @@ import {
   YAxis,
 } from "recharts";
 
+import { FINAL_GRADE_SCALE } from "@/lib/analytics/config";
 import type { SubjectTrendSeries } from "@/lib/analytics/trends";
+import { chartTooltipProps } from "@/features/analytics/components/chart-tooltip";
 
-const COLORS = ["#38bdf8", "#818cf8", "#f59e0b", "#34d399", "#f472b6"];
+const COLORS = [
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
+];
 
 interface SubjectTrendLinesProps {
   data: SubjectTrendSeries[];
@@ -23,24 +31,30 @@ export function SubjectTrendLines({ data }: SubjectTrendLinesProps) {
 
   return (
     <div className="h-72 w-full">
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
         <LineChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-          <XAxis dataKey="label" stroke="#64748b" tickLine={false} axisLine={false} />
-          <YAxis domain={[1, 8]} stroke="#64748b" tickLine={false} axisLine={false} />
-          <Tooltip
-            contentStyle={{
-              backgroundColor: "#0f172a",
-              borderRadius: 8,
-              border: "none",
-              color: "#e2e8f0",
-            }}
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.6} />
+          <XAxis
+            dataKey="label"
+            stroke="var(--text-muted)"
+            tick={{ fill: "var(--text-muted)", fontSize: 11 }}
+            tickLine={false}
+            axisLine={false}
           />
+          <YAxis
+            domain={[FINAL_GRADE_SCALE.min, FINAL_GRADE_SCALE.max]}
+            stroke="var(--text-muted)"
+            tick={{ fill: "var(--text-muted)", fontSize: 11 }}
+            tickLine={false}
+            axisLine={false}
+          />
+          <Tooltip {...chartTooltipProps} />
           {data.map((series, index) => (
             <Line
               key={series.subjectId}
               type="monotone"
-              dataKey={series.subjectName}
+              dataKey={series.subjectId}
+              name={series.subjectName}
               stroke={COLORS[index % COLORS.length]}
               strokeWidth={2}
               dot={false}
@@ -58,7 +72,7 @@ function buildChartData(data: SubjectTrendSeries[]) {
   return terms.map((label, index) => {
     const row: Record<string, number | string> = { label };
     for (const series of data) {
-      row[series.subjectName] = series.points[index]?.value ?? 0;
+      row[series.subjectId] = series.points[index]?.value ?? 0;
     }
     return row;
   });

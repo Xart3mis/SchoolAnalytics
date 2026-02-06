@@ -1,9 +1,11 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
 import { deleteSession, SESSION_COOKIE_NAME } from "@/lib/auth/session";
 
 export async function POST(request: Request) {
-  const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+  const cookieStore = await cookies();
+  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
   if (token) {
     await deleteSession(token);
   }

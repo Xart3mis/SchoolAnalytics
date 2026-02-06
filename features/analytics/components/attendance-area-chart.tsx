@@ -10,7 +10,9 @@ import {
   YAxis,
 } from "recharts";
 
+import { FINAL_GRADE_SCALE } from "@/lib/analytics/config";
 import type { TrendPoint } from "@/lib/analytics/dashboard";
+import { chartTooltipProps } from "@/features/analytics/components/chart-tooltip";
 
 interface PerformanceAreaChartProps {
   data: TrendPoint[];
@@ -19,36 +21,38 @@ interface PerformanceAreaChartProps {
 export function PerformanceAreaChart({ data }: PerformanceAreaChartProps) {
   return (
     <div className="h-64 w-full">
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
         <AreaChart data={data} margin={{ top: 12, right: 12, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id="performanceFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#38bdf8" stopOpacity={0.45} />
-              <stop offset="100%" stopColor="#0f172a" stopOpacity={0.05} />
+              <stop offset="0%" stopColor="var(--chart-1)" stopOpacity={0.45} />
+              <stop offset="100%" stopColor="var(--chart-3)" stopOpacity={0.08} />
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-          <XAxis dataKey="label" stroke="#64748b" tickLine={false} axisLine={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.6} />
+          <XAxis
+            dataKey="label"
+            stroke="var(--text-muted)"
+            tick={{ fill: "var(--text-muted)", fontSize: 11 }}
+            tickLine={false}
+            axisLine={false}
+          />
           <YAxis
-            domain={[1, 8]}
-            stroke="#64748b"
+            domain={[FINAL_GRADE_SCALE.min, FINAL_GRADE_SCALE.max]}
+            stroke="var(--text-muted)"
+            tick={{ fill: "var(--text-muted)", fontSize: 11 }}
             tickLine={false}
             axisLine={false}
             tickFormatter={(value) => `${value}`}
           />
           <Tooltip
-            contentStyle={{
-              backgroundColor: "#0f172a",
-              borderRadius: 8,
-              border: "none",
-              color: "#e2e8f0",
-            }}
-            formatter={(value: number) => [`${value.toFixed(2)}`, "Average Score"]}
+            {...chartTooltipProps}
+            formatter={(value?: number) => [`${(value ?? 0).toFixed(2)}`, "Avg Final Grade"]}
           />
           <Area
             type="monotone"
             dataKey="value"
-            stroke="#38bdf8"
+            stroke="var(--chart-2)"
             strokeWidth={2}
             fill="url(#performanceFill)"
           />

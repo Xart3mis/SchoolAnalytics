@@ -1,28 +1,44 @@
 "use client";
 
+import * as React from "react";
 import { usePathname } from "next/navigation";
 
 import { AppHeader } from "@/features/shell/components/app-header";
 import { AppSidebar } from "@/features/shell/components/app-sidebar";
+import { useUiStore } from "@/hooks/use-ui-store";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isLogin = pathname === "/login";
+  const { sidebarOpen, setSidebarOpen } = useUiStore();
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.innerWidth < 768) {
+      setSidebarOpen(false);
+    }
+  }, [setSidebarOpen]);
 
   if (isLogin) {
     return <div className="min-h-screen">{children}</div>;
   }
 
   return (
-    <div className="app-background relative flex min-h-screen w-full overflow-hidden">
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -top-32 right-[-10%] h-72 w-72 rounded-full bg-sky-200/40 blur-3xl dark:bg-sky-900/30" />
-        <div className="absolute bottom-[-20%] left-[-5%] h-80 w-80 rounded-full bg-indigo-200/40 blur-3xl dark:bg-indigo-900/30" />
-      </div>
+    <div className="app-background relative flex min-h-dvh w-full overflow-hidden bg-[color:var(--bg)] text-[color:var(--text)] lg:h-screen">
+      {sidebarOpen ? (
+        <button
+          type="button"
+          aria-label="Close navigation"
+          onClick={() => setSidebarOpen(false)}
+          className="fixed inset-0 z-20 bg-black/40 backdrop-blur-[1px] md:hidden"
+        />
+      ) : null}
       <AppSidebar />
-      <div className="relative z-10 flex flex-1 flex-col">
+      <div className="relative z-10 flex flex-1 flex-col overflow-hidden">
         <AppHeader />
-        <main className="flex-1 px-6 py-6 animate-fade-up">{children}</main>
+        <main className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6 lg:px-8 animate-fade-up">
+          <div className="mx-auto w-full max-w-[1400px]">{children}</div>
+        </main>
       </div>
     </div>
   );

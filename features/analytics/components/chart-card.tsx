@@ -8,13 +8,13 @@ interface ChartCardProps {
 
 export function ChartCard({ title, subtitle, children }: ChartCardProps) {
   return (
-    <Card className="h-full transition-transform duration-300 ease-out hover:-translate-y-1">
+    <Card className="h-full transition-transform duration-300 ease-out hover:-translate-y-0.5">
       <CardHeader>
-        <CardTitle className="text-sm uppercase tracking-[0.2em] text-slate-500">
+        <CardTitle className="text-xs uppercase tracking-[0.18em] text-[color:var(--accent)] sm:text-sm">
           {title}
         </CardTitle>
         {subtitle ? (
-          <p className="text-xs text-slate-500 dark:text-slate-400">{subtitle}</p>
+          <p className="text-xs text-[color:var(--text-muted)]">{subtitle}</p>
         ) : null}
       </CardHeader>
       <CardContent>{children}</CardContent>

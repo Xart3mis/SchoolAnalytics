@@ -11,6 +11,7 @@ export function CreateUserForm() {
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const form = event.currentTarget;
     setStatus(null);
     setLoading(true);
 
@@ -35,7 +36,7 @@ export function CreateUserForm() {
       return;
     }
 
-    event.currentTarget.reset();
+    form?.reset();
     setStatus("User created.");
     setLoading(false);
   }
@@ -50,7 +51,7 @@ export function CreateUserForm() {
         <Input name="password" type="password" placeholder="Temporary password" required />
         <select
           name="role"
-          className="h-10 rounded-md border border-slate-200 bg-white/80 px-3 text-sm text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 dark:border-slate-800 dark:bg-slate-950/80 dark:text-slate-200 dark:focus-visible:ring-slate-600"
+          className="h-10 rounded-md border border-[color:var(--border)] bg-[color:var(--surface)] px-3 text-sm text-[color:var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent)]"
           defaultValue="USER"
         >
           <option value="USER">User</option>
@@ -61,7 +62,7 @@ export function CreateUserForm() {
         <Button type="submit" disabled={loading}>
           {loading ? "Creating..." : "Create User"}
         </Button>
-        {status ? <span className="text-xs text-slate-500">{status}</span> : null}
+        {status ? <span className="text-xs text-[color:var(--text-muted)]">{status}</span> : null}
       </div>
     </form>
   );

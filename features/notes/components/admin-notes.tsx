@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,6 +26,59 @@ export function AdminNotes({ pageKey }: AdminNotesProps) {
   const [user, setUser] = useState<UserInfo | null>(null);
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<Note | null>(null);
+  const modalRef = useRef<HTMLDivElement | null>(null);
+  const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!pendingDelete) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setPendingDelete(null);
+        return;
+      }
+
+      if (event.key !== "Tab") return;
+
+      const container = modalRef.current;
+      if (!container) return;
+
+      const focusable = Array.from(
+        container.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        )
+      ).filter((el) => !el.hasAttribute("disabled"));
+
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const isShift = event.shiftKey;
+
+      if (!isShift && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      } else if (isShift && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    cancelButtonRef.current?.focus();
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [pendingDelete]);
 
   useEffect(() => {
     async function load() {
@@ -66,10 +120,24 @@ export function AdminNotes({ pageKey }: AdminNotesProps) {
     setLoading(false);
   }
 
+  async function handleDelete(noteId: string) {
+    setDeletingId(noteId);
+    const response = await fetch(`/api/admin/notes?id=${encodeURIComponent(noteId)}`, {
+      method: "DELETE",
+    });
+
+    if (response.ok) {
+      setNotes((prev) => prev.filter((note) => note.id !== noteId));
+    }
+
+    setDeletingId(null);
+    return response.ok;
+  }
+
   return (
-    <Card className="transition-transform duration-300 ease-out hover:-translate-y-1">
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle className="text-sm uppercase tracking-[0.25em] text-slate-500">
+    <Card className="transition-transform duration-300 ease-out hover:-translate-y-0.5">
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <CardTitle className="text-xs uppercase tracking-[0.18em] text-[color:var(--accent)] sm:text-sm">
           Admin Notes
         </CardTitle>
         {user?.role === "ADMIN" ? (
@@ -84,21 +152,34 @@ export function AdminNotes({ pageKey }: AdminNotesProps) {
             value={content}
             onChange={(event) => setContent(event.target.value)}
             placeholder="Share guidance for teachers..."
-            className="min-h-[80px] w-full rounded-lg border border-slate-200 bg-white/90 p-3 text-sm text-slate-700 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 dark:border-slate-800 dark:bg-slate-950/80 dark:text-slate-200 dark:focus-visible:ring-slate-600"
+            className="min-h-[80px] w-full rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] p-3 text-sm text-[color:var(--text)] placeholder:text-[color:var(--text-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent)]"
           />
         ) : null}
         {notes.length === 0 ? (
-          <p className="text-sm text-slate-500">No notes yet.</p>
+          <p className="text-sm text-[color:var(--text-muted)]">No notes yet.</p>
         ) : (
           <div className="space-y-3">
             {notes.map((note) => (
               <div
                 key={note.id}
-                className="rounded-lg border border-slate-200 bg-white/80 p-3 text-sm text-slate-600 dark:border-slate-800 dark:bg-slate-950/70 dark:text-slate-200"
+                className="rounded-lg border border-[color:var(--border)] bg-[color:var(--surface)] p-3 text-sm text-[color:var(--text)]"
               >
-                <div className="flex items-center justify-between text-xs uppercase tracking-[0.2em] text-slate-400">
+                <div className="flex items-center justify-between gap-3 text-xs uppercase tracking-[0.2em] text-[color:var(--text-muted)]">
                   <span>{note.author}</span>
-                  <span>{new Date(note.createdAt).toLocaleDateString()}</span>
+                  <div className="flex items-center gap-3">
+                    <span>{new Date(note.createdAt).toLocaleDateString()}</span>
+                    {user?.role === "ADMIN" ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setPendingDelete(note)}
+                        disabled={deletingId === note.id}
+                        className="h-6 px-2 text-[10px] uppercase tracking-[0.2em]"
+                      >
+                        {deletingId === note.id ? "Deleting..." : "Delete"}
+                      </Button>
+                    ) : null}
+                  </div>
                 </div>
                 <p className="mt-2 whitespace-pre-line text-sm">{note.content}</p>
               </div>
@@ -106,6 +187,54 @@ export function AdminNotes({ pageKey }: AdminNotesProps) {
           </div>
         )}
       </CardContent>
+      {mounted && pendingDelete
+        ? createPortal(
+            <div
+              className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 px-4"
+              onClick={() => setPendingDelete(null)}
+            >
+              <div
+                ref={modalRef}
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="delete-note-title"
+                className="w-full max-w-sm rounded-xl border border-[color:var(--border)] bg-[color:var(--surface)] p-5 shadow-[0_24px_60px_-35px_rgba(0,14,20,0.7)]"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <div id="delete-note-title" className="text-sm font-semibold text-[color:var(--text)]">
+                  Delete note?
+                </div>
+                <p className="mt-2 text-xs text-[color:var(--text-muted)]">
+                  This will permanently remove the note: “{pendingDelete.content.slice(0, 80)}
+                  {pendingDelete.content.length > 80 ? "…" : ""}”
+                </p>
+                <div className="mt-4 flex items-center justify-end gap-2">
+                  <Button
+                    ref={cancelButtonRef}
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setPendingDelete(null)}
+                    disabled={deletingId === pendingDelete.id}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={async () => {
+                      await handleDelete(pendingDelete.id);
+                      setPendingDelete(null);
+                    }}
+                    disabled={deletingId === pendingDelete.id}
+                    className="bg-[color:var(--danger)] text-white hover:brightness-95"
+                  >
+                    {deletingId === pendingDelete.id ? "Deleting..." : "Delete"}
+                  </Button>
+                </div>
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
     </Card>
   );
 }

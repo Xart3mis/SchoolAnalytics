@@ -32,8 +32,8 @@ export function DashboardCharts({
   gradeDistribution,
 }: DashboardChartsProps) {
   return (
-    <section className="stagger grid gap-4 xl:grid-cols-[2fr_1fr]">
-      <ChartCard title="Performance Trends" subtitle="Trimester averages">
+    <section className="stagger grid gap-3 sm:gap-4 xl:grid-cols-[2fr_1fr]">
+      <ChartCard title="Final Grade Trends" subtitle="Average final grade per term (1-7)">
         <Suspense fallback={<div className="h-64" />}>
           <PerformanceAreaChart data={performanceTrend} />
         </Suspense>
