@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 
 import { RISK_THRESHOLDS } from "@/lib/analytics/config";
-import { weightedScoreSql } from "@/lib/analytics/sql";
+import { mypCriteriaTotalSql, mypFinalGradeSql } from "@/lib/analytics/sql";
 import { prisma } from "@/lib/prisma";
 
 export interface KpiMetric {
@@ -44,10 +44,15 @@ function riskLevel(score: number) {
 }
 
 export async function getDashboardData(termId?: string): Promise<DashboardData> {
-  const activeTerm =
-    termId
-      ? await prisma.term.findUnique({ where: { id: termId } })
-      : await prisma.term.findFirst({ orderBy: { createdAt: "desc" } });
+  const activeTerm = termId
+    ? await prisma.academicTerm.findUnique({
+        where: { id: termId },
+        include: { academicYear: true },
+      })
+    : await prisma.academicTerm.findFirst({
+        orderBy: { startDate: "desc" },
+        include: { academicYear: true },
+      });
 
   if (!activeTerm) {
     return {
@@ -59,34 +64,63 @@ export async function getDashboardData(termId?: string): Promise<DashboardData> 
     };
   }
 
-  const terms = await prisma.term.findMany({
-    where: { academicYear: activeTerm.academicYear },
-    orderBy: { trimester: "asc" },
+  const terms = await prisma.academicTerm.findMany({
+    where: { academicYearId: activeTerm.academicYearId },
+    orderBy: { startDate: "asc" },
   });
 
   const termIds = terms.map((term) => term.id);
-  const scoreExpression = weightedScoreSql();
+  const totalExpression = mypCriteriaTotalSql();
+  const finalGradeExpression = mypFinalGradeSql(totalExpression);
 
   const termAverages = termIds.length
-    ? await prisma.$queryRaw<{ termId: string; avgScore: number }[]>(
+    ? await prisma.$queryRaw<{ termId: string; avgGrade: number }[]>(
         Prisma.sql`
-          SELECT "termId", AVG(${scoreExpression})::float AS "avgScore"
-          FROM "StudentSubjectTermScore"
-          WHERE "termId" IN (${Prisma.join(termIds)})
+          WITH final_grades AS (
+            SELECT ge."studentId",
+                   cs."academicTermId" AS "termId",
+                   cs."courseId" AS "courseId",
+                   ${finalGradeExpression}::int AS "finalGrade"
+            FROM "GradeEntry" ge
+            JOIN "GradeEntryCriterion" gec ON gec."gradeEntryId" = ge."id"
+            JOIN "Assignment" a ON a."id" = ge."assignmentId"
+            JOIN "ClassSection" cs ON cs."id" = a."classSectionId"
+            WHERE cs."academicTermId" IN (${Prisma.join(termIds)})
+            GROUP BY ge."studentId", cs."academicTermId", cs."courseId"
+          )
+          SELECT "termId", AVG("finalGrade")::float AS "avgGrade"
+          FROM final_grades
           GROUP BY "termId"
         `
       )
     : [];
 
   const termAverageMap = new Map(
-    termAverages.map((row) => [row.termId, Number(row.avgScore)])
+    termAverages.map((row) => [row.termId, Number(row.avgGrade)])
   );
 
-  const gradeGroups = await prisma.student.groupBy({
-    by: ["gradeLevel"],
-    _count: { _all: true },
-    orderBy: { gradeLevel: "asc" },
-  });
+  const gradeGroups = await prisma.$queryRaw<
+    Array<{ gradeLevel: number; count: number }>
+  >(Prisma.sql`
+    WITH final_grades AS (
+      SELECT ge."studentId",
+             cs."courseId" AS "courseId",
+             ${finalGradeExpression}::int AS "finalGrade"
+      FROM "GradeEntry" ge
+      JOIN "GradeEntryCriterion" gec ON gec."gradeEntryId" = ge."id"
+      JOIN "Assignment" a ON a."id" = ge."assignmentId"
+      JOIN "ClassSection" cs ON cs."id" = a."classSectionId"
+      WHERE cs."academicTermId" = ${activeTerm.id}
+      GROUP BY ge."studentId", cs."courseId"
+    )
+    SELECT gl."name"::int AS "gradeLevel",
+           COUNT(DISTINCT final_grades."studentId")::int AS count
+    FROM final_grades
+    JOIN "Course" c ON c."id" = final_grades."courseId"
+    JOIN "GradeLevel" gl ON gl."id" = c."gradeLevelId"
+    GROUP BY gl."name"
+    ORDER BY gl."name"::int ASC
+  `);
 
   const [{ totalStudents, averageScore, highRiskCount } = { totalStudents: 0, averageScore: 0, highRiskCount: 0 }] =
     await prisma.$queryRaw<
@@ -94,12 +128,22 @@ export async function getDashboardData(termId?: string): Promise<DashboardData> 
     >(Prisma.sql`
       SELECT
         COUNT(*)::int AS "totalStudents",
-        AVG(stats."avgScore")::float AS "averageScore",
-        SUM(CASE WHEN stats."avgScore" <= ${RISK_THRESHOLDS.high} THEN 1 ELSE 0 END)::int AS "highRiskCount"
+        AVG(stats."avgGrade")::float AS "averageScore",
+        SUM(CASE WHEN stats."avgGrade" <= ${RISK_THRESHOLDS.high} THEN 1 ELSE 0 END)::int AS "highRiskCount"
       FROM (
-        SELECT "studentId", AVG(${scoreExpression})::float AS "avgScore"
-        FROM "StudentSubjectTermScore"
-        WHERE "termId" = ${activeTerm.id}
+        WITH final_grades AS (
+          SELECT ge."studentId",
+                 cs."courseId" AS "courseId",
+                 ${finalGradeExpression}::int AS "finalGrade"
+          FROM "GradeEntry" ge
+          JOIN "GradeEntryCriterion" gec ON gec."gradeEntryId" = ge."id"
+          JOIN "Assignment" a ON a."id" = ge."assignmentId"
+          JOIN "ClassSection" cs ON cs."id" = a."classSectionId"
+          WHERE cs."academicTermId" = ${activeTerm.id}
+          GROUP BY ge."studentId", cs."courseId"
+        )
+        SELECT "studentId", AVG("finalGrade")::float AS "avgGrade"
+        FROM final_grades
         GROUP BY "studentId"
       ) AS stats
     `);
@@ -107,14 +151,37 @@ export async function getDashboardData(termId?: string): Promise<DashboardData> 
   const atRiskRows = await prisma.$queryRaw<
     { studentId: string; fullName: string; gradeLevel: number; avgScore: number }[]
   >(Prisma.sql`
+    WITH final_grades AS (
+      SELECT ge."studentId",
+             cs."courseId" AS "courseId",
+             ${finalGradeExpression}::int AS "finalGrade"
+      FROM "GradeEntry" ge
+      JOIN "GradeEntryCriterion" gec ON gec."gradeEntryId" = ge."id"
+      JOIN "Assignment" a ON a."id" = ge."assignmentId"
+      JOIN "ClassSection" cs ON cs."id" = a."classSectionId"
+      WHERE cs."academicTermId" = ${activeTerm.id}
+      GROUP BY ge."studentId", cs."courseId"
+    ),
+    student_stats AS (
+      SELECT "studentId", AVG("finalGrade")::float AS "avgGrade"
+      FROM final_grades
+      GROUP BY "studentId"
+    ),
+    grade_levels AS (
+      SELECT final_grades."studentId", MIN(gl."name")::int AS "gradeLevel"
+      FROM final_grades
+      JOIN "Course" c ON c."id" = final_grades."courseId"
+      JOIN "GradeLevel" gl ON gl."id" = c."gradeLevelId"
+      GROUP BY final_grades."studentId"
+    )
     SELECT s."id" AS "studentId",
-           s."fullName",
-           s."gradeLevel",
-           AVG(${scoreExpression})::float AS "avgScore"
-    FROM "StudentSubjectTermScore" st
-    JOIN "Student" s ON s."id" = st."studentId"
-    WHERE st."termId" = ${activeTerm.id}
-    GROUP BY s."id"
+           COALESCE(u."displayName", CONCAT_WS(' ', s."firstName", s."lastName"), u."email") AS "fullName",
+           grade_levels."gradeLevel" AS "gradeLevel",
+           student_stats."avgGrade"::float AS "avgScore"
+    FROM student_stats
+    JOIN grade_levels ON grade_levels."studentId" = student_stats."studentId"
+    JOIN "Student" s ON s."id" = student_stats."studentId"
+    JOIN "User" u ON u."id" = s."userId"
     ORDER BY "avgScore" ASC
     LIMIT 60
   `);
@@ -128,7 +195,7 @@ export async function getDashboardData(termId?: string): Promise<DashboardData> 
       },
       {
         id: "avg-score",
-        label: "Average Score",
+        label: "Average Final Grade",
         value: Number(averageScore ?? 0).toFixed(2),
       },
       {
@@ -139,16 +206,16 @@ export async function getDashboardData(termId?: string): Promise<DashboardData> 
       {
         id: "terms",
         label: "Active Term",
-        value: `${activeTerm.trimester}`,
+        value: `${activeTerm.name}`,
       },
     ],
     performanceTrend: terms.map((term) => ({
-      label: term.trimester,
+      label: term.name,
       value: Number(termAverageMap.get(term.id) ?? 0),
     })),
     gradeDistribution: gradeGroups.map((group) => ({
       label: `Grade ${group.gradeLevel}`,
-      value: group._count._all,
+      value: group.count,
     })),
     atRisk: atRiskRows.map((row) => ({
       id: row.studentId,
@@ -157,6 +224,6 @@ export async function getDashboardData(termId?: string): Promise<DashboardData> 
       averageScore: Number(row.avgScore),
       riskLevel: riskLevel(Number(row.avgScore)),
     })),
-    activeTermLabel: `${activeTerm.academicYear} ${activeTerm.trimester}`,
+    activeTermLabel: `${activeTerm.academicYear.name} ${activeTerm.name}`,
   };
 }

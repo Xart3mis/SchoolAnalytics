@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getSessionFromCookies } from "@/lib/auth/session";
-import { weightedScoreSql } from "@/lib/analytics/sql";
+import { mypCriteriaTotalSql, mypFinalGradeSql } from "@/lib/analytics/sql";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 
@@ -32,33 +32,51 @@ export async function GET(
     return NextResponse.json({ error: "Invalid grade." }, { status: 400 });
   }
 
-  const term = await prisma.term.findFirst({ orderBy: { createdAt: "desc" } });
+  const term = await prisma.academicTerm.findFirst({ orderBy: { startDate: "desc" } });
   if (!term) {
     return NextResponse.json({ error: "No term data." }, { status: 400 });
   }
 
-  const scoreExpression = weightedScoreSql();
+  const totalExpression = mypCriteriaTotalSql();
+  const finalGradeExpression = mypFinalGradeSql(totalExpression);
   const rows = await prisma.$queryRaw<
     Array<{ id: string; fullName: string; gradeLevel: number; avgScore: number }>
   >(Prisma.sql`
+    WITH final_grades AS (
+      SELECT ge."studentId",
+             cs."courseId" AS "courseId",
+             ${finalGradeExpression}::int AS "finalGrade"
+      FROM "GradeEntry" ge
+      JOIN "GradeEntryCriterion" gec ON gec."gradeEntryId" = ge."id"
+      JOIN "Assignment" a ON a."id" = ge."assignmentId"
+      JOIN "ClassSection" cs ON cs."id" = a."classSectionId"
+      JOIN "Course" c ON c."id" = cs."courseId"
+      JOIN "GradeLevel" gl ON gl."id" = c."gradeLevelId"
+      WHERE gl."name" = ${String(gradeLevel)} AND cs."academicTermId" = ${term.id}
+      GROUP BY ge."studentId", cs."courseId"
+    ),
+    student_stats AS (
+      SELECT "studentId", AVG("finalGrade")::float AS "avgGrade"
+      FROM final_grades
+      GROUP BY "studentId"
+    )
     SELECT s."id",
-           s."fullName",
-           s."gradeLevel",
-           AVG(${scoreExpression})::float AS "avgScore"
-    FROM "StudentSubjectTermScore" st
-    JOIN "Student" s ON s."id" = st."studentId"
-    WHERE s."gradeLevel" = ${gradeLevel} AND st."termId" = ${term.id}
-    GROUP BY s."id"
+           COALESCE(u."displayName", CONCAT_WS(' ', s."firstName", s."lastName"), u."email") AS "fullName",
+           ${gradeLevel}::int AS "gradeLevel",
+           student_stats."avgGrade"::float AS "avgScore"
+    FROM student_stats
+    JOIN "Student" s ON s."id" = student_stats."studentId"
+    JOIN "User" u ON u."id" = s."userId"
     ORDER BY "avgScore" ASC
   `);
 
-  const header = toCsvRow(["Student ID", "Name", "Grade", "Average Score"]);
+  const header = toCsvRow(["Student ID", "Name", "Grade", "Average Final Grade"]);
   const lines = rows.map((row) =>
     toCsvRow([row.id, row.fullName, row.gradeLevel, Number(row.avgScore).toFixed(2)])
   );
 
   const csv = [header, ...lines].join("\n");
-  const filename = `grade_${gradeLevel}_${term.trimester}.csv`;
+  const filename = `grade_${gradeLevel}_${term.name}.csv`;
 
   return new NextResponse(csv, {
     headers: {

@@ -1,24 +1,10 @@
-import { CRITERIA_WEIGHTS } from "@/lib/analytics/config";
+import { CRITERION_SCORE_SCALE } from "@/lib/analytics/config";
 
-export type CriteriaScores = {
-  criterionA: number;
-  criterionB: number;
-  criterionC: number;
-  criterionD: number;
-};
-
-export function calculateWeightedScore(scores: CriteriaScores) {
-  const totalWeight =
-    CRITERIA_WEIGHTS.A +
-    CRITERIA_WEIGHTS.B +
-    CRITERIA_WEIGHTS.C +
-    CRITERIA_WEIGHTS.D;
-
-  return (
-    (scores.criterionA * CRITERIA_WEIGHTS.A +
-      scores.criterionB * CRITERIA_WEIGHTS.B +
-      scores.criterionC * CRITERIA_WEIGHTS.C +
-      scores.criterionD * CRITERIA_WEIGHTS.D) /
-    totalWeight
-  );
+export function normalizeScore(
+  score: number | null | undefined,
+  maxScore?: number | null
+) {
+  if (score == null) return 0;
+  if (!maxScore) return score;
+  return (score / maxScore) * CRITERION_SCORE_SCALE.max;
 }
