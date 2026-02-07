@@ -73,12 +73,12 @@ export function AppHeader() {
   const selectedYear = selectedYearIdParam
     ? academicYears.find((year) => year.id === selectedYearIdParam)
     : academicYears.find((year) => year.terms.some((term) => term.id === selectedTermId)) ??
-      academicYears[0];
+    academicYears[0];
   const selectedTerm = selectedTermId
     ? selectedYear?.terms.find((term) => term.id === selectedTermId)
-    : undefined;
+    : selectedYear?.terms[2] ?? undefined;
   const selectedYearLabel = selectedYear ? `${selectedYear.name}` : "Select year";
-  const selectedTermLabel = selectedTerm?.name ?? "Latest Trimester";
+  const selectedTermLabel = selectedTerm?.name ?? "T-";
   const yearQuery = selectedYear?.id ? `?year=${selectedYear.id}` : "";
 
   React.useEffect(() => {
@@ -283,9 +283,6 @@ export function AppHeader() {
                   ) : null}
                 </div>
               )}
-              <div className="mt-2 border-t border-[color:var(--border)] px-3 pt-2 text-[10px] uppercase tracking-[0.2em] text-[color:var(--text-muted)]">
-                Press Enter to search students
-              </div>
             </div>
           ) : null}
         </div>
@@ -351,11 +348,10 @@ export function AppHeader() {
                           key={year.id}
                           type="button"
                           onClick={() => handleSelectYear(year.id)}
-                          className={`flex w-full items-center justify-between rounded-lg px-2 py-2 text-xs font-semibold uppercase tracking-[0.14em] ${
-                            isSelected
-                              ? "bg-[color:var(--accent-2)] text-[color:var(--text)]"
-                              : "text-[color:var(--text-muted)] hover:bg-[color:var(--surface-strong)] hover:text-[color:var(--text)]"
-                          }`}
+                          className={`flex w-full items-center justify-between rounded-lg px-2 py-2 text-xs font-semibold uppercase tracking-[0.14em] ${isSelected
+                            ? "bg-[color:var(--accent-2)] text-[color:var(--text)]"
+                            : "text-[color:var(--text-muted)] hover:bg-[color:var(--surface-strong)] hover:text-[color:var(--text)]"
+                            }`}
                         >
                           <span>{year.name}</span>
                           {isSelected ? (
@@ -379,7 +375,6 @@ export function AppHeader() {
                   disabled={!selectedYear || selectedYear.terms.length === 0}
                   className="mt-2"
                 >
-                  <option value="">Latest trimester</option>
                   {(selectedYear?.terms ?? []).map((term) => (
                     <option key={term.id} value={term.id}>
                       {term.name}
