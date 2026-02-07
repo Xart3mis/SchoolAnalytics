@@ -42,12 +42,12 @@ export default async function StudentsPage({ searchParams }: StudentsPageProps) 
     page === requestedPage
       ? initialData
       : await getStudentList({
-          termId: term.id,
-          page,
-          pageSize,
-          query,
-          gradeLevel: selectedGrade,
-        });
+        termId: term.id,
+        page,
+        pageSize,
+        query,
+        gradeLevel: selectedGrade,
+      });
 
   return (
     <div className="flex flex-col gap-6">
@@ -65,7 +65,6 @@ export default async function StudentsPage({ searchParams }: StudentsPageProps) 
             Students Overview
           </CardTitle>
           <StudentsFilters
-            initialQuery={query}
             initialGrade={selectedGrade}
             yearId={yearId}
             termId={resolved?.term}
@@ -76,7 +75,7 @@ export default async function StudentsPage({ searchParams }: StudentsPageProps) 
             <div className="min-w-[640px]">
               <div className="grid grid-cols-4 gap-4 border-b border-[color:var(--border)] pb-2 text-xs font-semibold uppercase text-[color:var(--text-muted)]">
                 <div>Student</div>
-                <div>Grade</div>
+                <div>Level</div>
                 <div>Criterion Avg</div>
                 <div>Risk</div>
               </div>
@@ -92,17 +91,16 @@ export default async function StudentsPage({ searchParams }: StudentsPageProps) 
                     >
                       {student.fullName}
                     </Link>
-                    <div>Grade {student.gradeLevel}</div>
+                    <div>Level {student.gradeLevel}</div>
                     <div>{student.averageScore.toFixed(2)}</div>
                     <div>
                       <span
-                        className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-wide ${
-                          student.riskLevel === "High"
+                        className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-semibold tracking-wide ${student.riskLevel === "High"
                             ? "bg-[color:var(--risk-high-bg)] text-[color:var(--risk-high-text)]"
                             : student.riskLevel === "Medium"
                               ? "bg-[color:var(--risk-medium-bg)] text-[color:var(--risk-medium-text)]"
                               : "bg-[color:var(--risk-low-bg)] text-[color:var(--risk-low-text)]"
-                        }`}
+                          }`}
                       >
                         {student.riskLevel}
                       </span>
