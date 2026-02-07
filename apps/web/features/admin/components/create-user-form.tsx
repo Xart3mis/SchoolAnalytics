@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ThemedSelect } from "@/components/ui/themed-select";
 
 export function CreateUserForm() {
   const [status, setStatus] = useState<string | null>(null);
@@ -49,14 +50,14 @@ export function CreateUserForm() {
       </div>
       <div className="grid gap-3 md:grid-cols-2">
         <Input name="password" type="password" placeholder="Temporary password" required />
-        <select
+        <ThemedSelect
           name="role"
-          className="h-10 rounded-md border border-[color:var(--border)] bg-[color:var(--surface)] px-3 text-sm text-[color:var(--text)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent)]"
+          className="h-10 text-sm"
           defaultValue="USER"
         >
           <option value="USER">User</option>
           <option value="ADMIN">Admin</option>
-        </select>
+        </ThemedSelect>
       </div>
       <div className="flex items-center gap-3">
         <Button type="submit" disabled={loading}>

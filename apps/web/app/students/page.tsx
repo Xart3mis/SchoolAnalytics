@@ -3,50 +3,59 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AdminNotes } from "@/features/notes/components/admin-notes";
 import { StatTiles } from "@/features/analytics/components/stat-tiles";
-import { getActiveTerm, getActiveTermForYear } from "@/lib/analytics/terms";
+import { StudentsFilters } from "@/features/analytics/components/students-filters";
+import { resolveSelectedTerm } from "@/lib/analytics/terms";
 import { getStudentList } from "@/lib/analytics/lists";
 import { requireSession } from "@/lib/auth/guards";
 
 interface StudentsPageProps {
-  searchParams?: Promise<{ page?: string; q?: string; term?: string; year?: string }>;
+  searchParams?: Promise<{ page?: string; q?: string; term?: string; year?: string; grade?: string }>;
 }
 
 export default async function StudentsPage({ searchParams }: StudentsPageProps) {
   await requireSession();
   const resolved = await searchParams;
-  const page = Math.max(1, Number(resolved?.page ?? "1"));
+  const requestedPage = Math.max(1, Number(resolved?.page ?? "1"));
   const query = resolved?.q ?? "";
-  const pageSize = 25;
-  const termId = resolved?.term;
+  const selectedGradeValue = resolved?.grade ? Number(resolved.grade) : undefined;
+  const selectedGrade = Number.isFinite(selectedGradeValue) ? selectedGradeValue : undefined;
+  const pageSize = 15;
   const yearId = resolved?.year;
-
-  let term = termId ? await getActiveTerm(termId) : null;
-  if (!term && yearId) {
-    term = await getActiveTermForYear(yearId);
-  }
-  if (!term) {
-    term = await getActiveTerm();
-  }
+  const term = await resolveSelectedTerm({
+    yearId,
+    termId: resolved?.term,
+  });
   if (!term) {
     return <div className="text-sm text-[color:var(--text-muted)]">No term data yet.</div>;
   }
 
-  const { rows, total } = await getStudentList({
+  const initialData = await getStudentList({
     termId: term.id,
-    page,
+    page: requestedPage,
     pageSize,
     query,
+    gradeLevel: selectedGrade,
   });
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const totalPages = Math.max(1, Math.ceil(initialData.total / pageSize));
+  const page = Math.min(requestedPage, totalPages);
+  const { rows, total } =
+    page === requestedPage
+      ? initialData
+      : await getStudentList({
+          termId: term.id,
+          page,
+          pageSize,
+          query,
+          gradeLevel: selectedGrade,
+        });
 
   return (
     <div className="flex flex-col gap-6">
       <StatTiles
         items={[
           { id: "students", label: "Students", value: total.toLocaleString() },
-          { id: "term", label: "Active Term", value: `${term.name}` },
           { id: "year", label: "Academic Year", value: term.academicYear.name },
-          { id: "page", label: "Page", value: `${page} / ${totalPages}` },
+          { id: "term", label: "Snapshot Term", value: `${term.name}` },
         ]}
       />
 
@@ -55,16 +64,12 @@ export default async function StudentsPage({ searchParams }: StudentsPageProps) 
           <CardTitle className="text-xs uppercase tracking-[0.18em] text-[color:var(--accent)] sm:text-sm">
             Students Overview
           </CardTitle>
-          <form className="flex w-full items-center gap-2 sm:w-auto">
-            {termId ? <input type="hidden" name="term" value={termId} /> : null}
-            {yearId ? <input type="hidden" name="year" value={yearId} /> : null}
-            <input
-              name="q"
-              defaultValue={query}
-              placeholder="Search student..."
-              className="h-8 w-full rounded-md border border-[color:var(--border)] bg-[color:var(--surface)] px-3 text-xs text-[color:var(--text)] placeholder:text-[color:var(--text-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent)] sm:w-56"
-            />
-          </form>
+          <StudentsFilters
+            initialQuery={query}
+            initialGrade={selectedGrade}
+            yearId={yearId}
+            termId={resolved?.term}
+          />
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -72,7 +77,7 @@ export default async function StudentsPage({ searchParams }: StudentsPageProps) 
               <div className="grid grid-cols-4 gap-4 border-b border-[color:var(--border)] pb-2 text-xs font-semibold uppercase text-[color:var(--text-muted)]">
                 <div>Student</div>
                 <div>Grade</div>
-                <div>Avg Final Grade</div>
+                <div>Criterion Avg</div>
                 <div>Risk</div>
               </div>
               <div className="divide-y divide-[color:var(--border)]">
@@ -82,7 +87,7 @@ export default async function StudentsPage({ searchParams }: StudentsPageProps) 
                     className="grid grid-cols-4 gap-4 py-3 text-[13px] text-[color:var(--text)] sm:text-sm"
                   >
                     <Link
-                      href={`/students/${student.id}?term=${term.id}`}
+                      href={`/students/${student.id}?year=${term.academicYearId}`}
                       className="font-medium text-[color:var(--text)] hover:text-[color:var(--accent-3)]"
                     >
                       {student.fullName}
@@ -117,7 +122,7 @@ export default async function StudentsPage({ searchParams }: StudentsPageProps) 
             <div className="flex items-center gap-2">
               {page > 1 ? (
                 <Link
-                  href={`/students?page=${page - 1}&q=${encodeURIComponent(query)}&term=${term.id}`}
+                  href={`/students?page=${page - 1}&q=${encodeURIComponent(query)}&year=${term.academicYearId}${selectedGrade ? `&grade=${selectedGrade}` : ""}`}
                   className="rounded-md border border-[color:var(--border)] px-3 py-1 text-xs text-[color:var(--text)] hover:bg-[color:var(--surface-strong)]"
                 >
                   Previous
@@ -129,7 +134,7 @@ export default async function StudentsPage({ searchParams }: StudentsPageProps) 
               )}
               {page < totalPages ? (
                 <Link
-                  href={`/students?page=${page + 1}&q=${encodeURIComponent(query)}&term=${term.id}`}
+                  href={`/students?page=${page + 1}&q=${encodeURIComponent(query)}&year=${term.academicYearId}${selectedGrade ? `&grade=${selectedGrade}` : ""}`}
                   className="rounded-md border border-[color:var(--border)] px-3 py-1 text-xs text-[color:var(--text)] hover:bg-[color:var(--surface-strong)]"
                 >
                   Next

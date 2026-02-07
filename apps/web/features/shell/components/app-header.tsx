@@ -1,11 +1,12 @@
 "use client";
 
-import { ChevronDown, ChevronRight, Command, LogOut, Menu, Moon, Search, Sun } from "lucide-react";
+import { ChevronDown, Command, LogOut, Menu, Moon, Search, Sun } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ThemedSelect } from "@/components/ui/themed-select";
 import { useUiStore } from "@/hooks/use-ui-store";
 import { useTheme } from "next-themes";
 import * as React from "react";
@@ -38,7 +39,6 @@ export function AppHeader() {
   const menuRef = React.useRef<HTMLDivElement | null>(null);
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [academicYears, setAcademicYears] = React.useState<AcademicYearOption[]>([]);
-  const [openYearId, setOpenYearId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     setMounted(true);
@@ -68,18 +68,18 @@ export function AppHeader() {
 
   const trimmedQuery = query.trim();
   const totalResults = results.students.length + results.classes.length;
-  const selectedTermId = searchParams.get("term") ?? "";
   const selectedYearIdParam = searchParams.get("year") ?? "";
-  const selectedYear =
-    academicYears.find((year) => year.id === selectedYearIdParam) ??
-    academicYears.find((year) => year.terms.some((term) => term.id === selectedTermId));
-  const selectedTerm = selectedYear?.terms.find((term) => term.id === selectedTermId);
-  const selectedTermLabel = selectedTerm
-    ? `${selectedTerm.name}`
-    : selectedYear
-      ? `${selectedYear.name}`
-      : "Select term";
-  const termQuery = selectedTermId ? `?term=${selectedTermId}` : "";
+  const selectedTermId = searchParams.get("term") ?? "";
+  const selectedYear = selectedYearIdParam
+    ? academicYears.find((year) => year.id === selectedYearIdParam)
+    : academicYears.find((year) => year.terms.some((term) => term.id === selectedTermId)) ??
+      academicYears[0];
+  const selectedTerm = selectedTermId
+    ? selectedYear?.terms.find((term) => term.id === selectedTermId)
+    : undefined;
+  const selectedYearLabel = selectedYear ? `${selectedYear.name}` : "Select year";
+  const selectedTermLabel = selectedTerm?.name ?? "Latest Trimester";
+  const yearQuery = selectedYear?.id ? `?year=${selectedYear.id}` : "";
 
   React.useEffect(() => {
     function handleClick(event: MouseEvent) {
@@ -134,22 +134,11 @@ export function AppHeader() {
     };
   }, [trimmedQuery]);
 
-  React.useEffect(() => {
-    if (!menuOpen) return;
-    if (selectedYear?.id) {
-      setOpenYearId(selectedYear.id);
-    } else if (academicYears[0]?.id) {
-      setOpenYearId(academicYears[0].id);
-    }
-  }, [menuOpen, selectedYear?.id, academicYears]);
-
-  const handleSelectTerm = React.useCallback(
-    (termId: string, yearId?: string) => {
+  const handleSelectYear = React.useCallback(
+    (yearId: string) => {
       const params = new URLSearchParams(searchParams.toString());
-      params.set("term", termId);
-      if (yearId) {
-        params.set("year", yearId);
-      }
+      params.set("year", yearId);
+      params.delete("term");
       params.delete("page");
       const query = params.toString();
       router.push(query ? `${pathname}?${query}` : pathname);
@@ -157,6 +146,36 @@ export function AppHeader() {
     },
     [pathname, router, searchParams]
   );
+
+  const handleSelectTrimester = React.useCallback(
+    (termId: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (selectedYear?.id) {
+        params.set("year", selectedYear.id);
+      }
+      if (termId) {
+        params.set("term", termId);
+      } else {
+        params.delete("term");
+      }
+      params.delete("page");
+      const query = params.toString();
+      router.push(query ? `${pathname}?${query}` : pathname);
+      setMenuOpen(false);
+    },
+    [pathname, router, searchParams, selectedYear?.id]
+  );
+
+  React.useEffect(() => {
+    if (academicYears.length === 0 || selectedYearIdParam || selectedTermId) {
+      return;
+    }
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("year", academicYears[0].id);
+    params.delete("page");
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname);
+  }, [academicYears, pathname, router, searchParams, selectedTermId, selectedYearIdParam]);
 
   const currentTheme = resolvedTheme ?? theme;
   const nextTheme = currentTheme === "dark" ? "light" : "dark";
@@ -193,8 +212,8 @@ export function AppHeader() {
                 event.preventDefault();
                 const params = new URLSearchParams();
                 params.set("q", trimmedQuery);
-                if (selectedTermId) {
-                  params.set("term", selectedTermId);
+                if (selectedYear?.id) {
+                  params.set("year", selectedYear.id);
                 }
                 router.push(`/students?${params.toString()}`);
                 setOpen(false);
@@ -224,7 +243,7 @@ export function AppHeader() {
                         {results.students.map((student) => (
                           <Link
                             key={student.id}
-                            href={`/students/${student.id}${termQuery}`}
+                            href={`/students/${student.id}${yearQuery}`}
                             onClick={() => setOpen(false)}
                             className="rounded-lg px-2 py-2 text-sm text-[color:var(--text)] transition-colors hover:bg-[color:var(--surface-strong)]"
                           >
@@ -244,7 +263,7 @@ export function AppHeader() {
                         {results.classes.map((cls) => (
                           <Link
                             key={cls.id}
-                            href={`/classes/${cls.id}${termQuery}`}
+                            href={`/classes/${cls.id}${yearQuery}`}
                             onClick={() => setOpen(false)}
                             className="rounded-lg px-2 py-2 text-sm text-[color:var(--text)] transition-colors hover:bg-[color:var(--surface-strong)]"
                           >
@@ -298,7 +317,7 @@ export function AppHeader() {
               </span>
             ) : null}
             <span className="hidden text-[10px] uppercase tracking-[0.16em] text-[color:var(--text-muted)] sm:inline">
-              {selectedTermLabel}
+              {selectedYearLabel} · {selectedTermLabel}
             </span>
             <ChevronDown className="h-3.5 w-3.5 text-[color:var(--text-muted)]" />
           </button>
@@ -321,54 +340,47 @@ export function AppHeader() {
                     </div>
                   ) : (
                     academicYears.map((year) => {
-                      const isOpen = openYearId === year.id;
+                      const isSelected = selectedYear?.id === year.id;
                       return (
-                        <div key={year.id} className="rounded-lg border border-transparent">
-                          <button
-                            type="button"
-                            onClick={() => setOpenYearId(isOpen ? null : year.id)}
-                            className={`flex w-full items-center justify-between rounded-lg px-2 py-2 text-xs font-semibold uppercase tracking-[0.14em] ${
-                              selectedYear?.id === year.id
-                                ? "bg-[color:var(--surface-strong)] text-[color:var(--text)]"
-                                : "text-[color:var(--text-muted)] hover:bg-[color:var(--surface-strong)] hover:text-[color:var(--text)]"
-                            }`}
-                          >
-                            <span>{year.name}</span>
-                            <ChevronRight
-                              className={`h-3.5 w-3.5 transition-transform ${isOpen ? "rotate-90" : ""}`}
-                            />
-                          </button>
-                          {isOpen ? (
-                            <div className="mt-1 flex flex-col gap-1 pl-3">
-                              {year.terms.map((term) => {
-                                const isSelected = term.id === selectedTermId;
-                                return (
-                                  <button
-                                    key={term.id}
-                                    type="button"
-                                    onClick={() => handleSelectTerm(term.id, year.id)}
-                                    className={`flex w-full items-center justify-between rounded-md px-2 py-1 text-xs ${
-                                      isSelected
-                                        ? "bg-[color:var(--accent-2)] text-[color:var(--text)]"
-                                        : "text-[color:var(--text)] hover:bg-[color:var(--surface-strong)]"
-                                    }`}
-                                  >
-                                    <span>{term.name}</span>
-                                    {isSelected ? (
-                                      <span className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
-                                        Selected
-                                      </span>
-                                    ) : null}
-                                  </button>
-                                );
-                              })}
-                            </div>
+                        <button
+                          key={year.id}
+                          type="button"
+                          onClick={() => handleSelectYear(year.id)}
+                          className={`flex w-full items-center justify-between rounded-lg px-2 py-2 text-xs font-semibold uppercase tracking-[0.14em] ${
+                            isSelected
+                              ? "bg-[color:var(--accent-2)] text-[color:var(--text)]"
+                              : "text-[color:var(--text-muted)] hover:bg-[color:var(--surface-strong)] hover:text-[color:var(--text)]"
+                          }`}
+                        >
+                          <span>{year.name}</span>
+                          {isSelected ? (
+                            <span className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
+                              Selected
+                            </span>
                           ) : null}
-                        </div>
+                        </button>
                       );
                     })
                   )}
                 </div>
+              </div>
+              <div className="border-t border-[color:var(--border)] px-2 py-2">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--text-muted)]">
+                  Trimester
+                </div>
+                <ThemedSelect
+                  value={selectedTermId}
+                  onChange={(event) => handleSelectTrimester(event.target.value)}
+                  disabled={!selectedYear || selectedYear.terms.length === 0}
+                  className="mt-2"
+                >
+                  <option value="">Latest trimester</option>
+                  {(selectedYear?.terms ?? []).map((term) => (
+                    <option key={term.id} value={term.id}>
+                      {term.name}
+                    </option>
+                  ))}
+                </ThemedSelect>
               </div>
               <div className="border-t border-[color:var(--border)] px-2 py-2">
                 <div className="flex flex-col gap-2">
