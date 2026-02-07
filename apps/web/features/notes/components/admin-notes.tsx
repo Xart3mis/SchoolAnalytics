@@ -30,11 +30,6 @@ export function AdminNotes({ pageKey }: AdminNotesProps) {
   const [pendingDelete, setPendingDelete] = useState<Note | null>(null);
   const modalRef = useRef<HTMLDivElement | null>(null);
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     if (!pendingDelete) return;
@@ -187,7 +182,7 @@ export function AdminNotes({ pageKey }: AdminNotesProps) {
           </div>
         )}
       </CardContent>
-      {mounted && pendingDelete
+      {pendingDelete
         ? createPortal(
             <div
               className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 px-4"
