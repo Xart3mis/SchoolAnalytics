@@ -79,7 +79,7 @@ export default async function StudentDetailPage({ params, searchParams }: Studen
               {studentName}
             </div>
             <div className="text-xs text-[color:var(--text-muted)]">
-              {gradeLevel ? `Grade ${gradeLevel}` : "Grade N/A"}
+              {gradeLevel ? `Level ${gradeLevel}` : "Level N/A"}
             </div>
           </CardContent>
         </Card>

@@ -78,7 +78,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     ORDER BY "avgScore" ASC
   `);
 
-  const header = toCsvRow(["Student ID", "Name", "Grade", "Criterion Average (0-8)"]);
+  const header = toCsvRow(["Student ID", "Name", "Level", "Criterion Average (0-8)"]);
   const lines = rows.map((row) =>
     toCsvRow([row.id, row.fullName, row.gradeLevel, Number(row.avgScore).toFixed(2)])
   );
