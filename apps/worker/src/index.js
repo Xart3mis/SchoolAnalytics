@@ -21,12 +21,7 @@ const worker = new Worker(
   queueName,
   async (job) => {
     if (job.name === "poll-source") {
-      const sourceName = String(job.data?.source || "unknown");
-      await prisma.sourceSystem.updateMany({
-        where: { name: sourceName },
-        data: { lastSyncAt: new Date() },
-      });
-      return { ok: true, source: sourceName };
+      // Do Work
     }
 
     return { ok: true, skipped: true };
