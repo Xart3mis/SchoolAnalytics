@@ -21,7 +21,7 @@ interface AtRiskTableProps {
   pageSize: number;
   totalCount: number;
   queryString?: string;
-  termId?: string;
+  yearId?: string;
 }
 
 export function AtRiskTable({
@@ -30,7 +30,7 @@ export function AtRiskTable({
   pageSize,
   totalCount,
   queryString,
-  termId,
+  yearId,
 }: AtRiskTableProps) {
   const [nameFilterInput, setNameFilterInput] = React.useState("");
   const deferredNameFilter = React.useDeferredValue(nameFilterInput);
@@ -53,7 +53,7 @@ export function AtRiskTable({
         ),
       },
       {
-        header: "Avg Final Grade",
+        header: "Criterion Avg",
         accessorKey: "averageScore",
         cell: ({ row }) => row.original.averageScore.toFixed(2),
       },
@@ -78,14 +78,14 @@ export function AtRiskTable({
         header: "Actions",
         cell: ({ row }) => (
           <Button asChild size="sm" variant="outline">
-            <Link href={`/students/${row.original.id}${termId ? `?term=${termId}` : ""}`}>
+            <Link href={`/students/${row.original.id}${yearId ? `?year=${yearId}` : ""}`}>
               View
             </Link>
           </Button>
         ),
       },
     ],
-    []
+    [yearId]
   );
 
   const table = useReactTable({

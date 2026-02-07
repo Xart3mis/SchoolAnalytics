@@ -9,10 +9,10 @@ interface AtRiskMiniTableProps {
   title: string;
   data: AtRiskRow[];
   exportHref: string;
-  termId?: string;
+  yearId?: string;
 }
 
-export function AtRiskMiniTable({ title, data, exportHref, termId }: AtRiskMiniTableProps) {
+export function AtRiskMiniTable({ title, data, exportHref, yearId }: AtRiskMiniTableProps) {
   const [filter, setFilter] = React.useState("");
   const trimmedFilter = filter.trim().toLowerCase();
   const filteredData = trimmedFilter
@@ -45,7 +45,7 @@ export function AtRiskMiniTable({ title, data, exportHref, termId }: AtRiskMiniT
           <div className="grid grid-cols-4 gap-3 border-b border-[color:var(--border)] px-4 py-2 text-xs font-semibold uppercase text-[color:var(--text-muted)]">
             <div>Student</div>
             <div>Grade</div>
-            <div>Avg Final</div>
+            <div>Criterion Avg</div>
             <div>Risk</div>
           </div>
           <div className="divide-y divide-[color:var(--border)]">
@@ -58,7 +58,7 @@ export function AtRiskMiniTable({ title, data, exportHref, termId }: AtRiskMiniT
                   className="grid grid-cols-4 gap-3 px-4 py-3 text-[13px] text-[color:var(--text)] sm:text-sm"
                 >
                   <Link
-                    href={`/students/${row.id}${termId ? `?term=${termId}` : ""}`}
+                    href={`/students/${row.id}${yearId ? `?year=${yearId}` : ""}`}
                     className="font-medium text-[color:var(--text)] hover:text-[color:var(--accent-3)]"
                   >
                     {row.fullName}

@@ -35,7 +35,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       ) : null}
       <AppSidebar />
       <div className="relative z-10 flex flex-1 flex-col overflow-hidden">
-        <AppHeader />
+        <React.Suspense
+          fallback={
+            <div className="sticky top-0 z-20 border-b border-[color:var(--border)] bg-[color:var(--surface)] px-4 py-3 sm:px-6 sm:py-4" />
+          }
+        >
+          <AppHeader />
+        </React.Suspense>
         <main className="flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6 lg:px-8 animate-fade-up">
           <div className="mx-auto w-full max-w-[1400px]">{children}</div>
         </main>
