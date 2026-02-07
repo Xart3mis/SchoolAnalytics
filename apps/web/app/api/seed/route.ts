@@ -12,6 +12,19 @@ const SUBJECTS = [
   { code: "HIST", name: "History" },
 ];
 
+function normalizeSeedEnv(value: string | undefined) {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
 export async function POST() {
   const data = getMockDashboardData();
 
@@ -256,11 +269,20 @@ export async function POST() {
     await prisma.gradeEntryCriterion.createMany({ data: gradeEntryCriteria });
   }
 
-  if (process.env.SEED_ADMIN_EMAIL && process.env.SEED_ADMIN_PASSWORD) {
-    const passwordHash = await hashPassword(process.env.SEED_ADMIN_PASSWORD);
-    await prisma.user.create({
-      data: {
-        email: process.env.SEED_ADMIN_EMAIL.toLowerCase(),
+  const seedAdminEmail = normalizeSeedEnv(process.env.SEED_ADMIN_EMAIL)?.toLowerCase();
+  const seedAdminPassword = normalizeSeedEnv(process.env.SEED_ADMIN_PASSWORD);
+  if (seedAdminEmail && seedAdminPassword) {
+    const passwordHash = await hashPassword(seedAdminPassword);
+    await prisma.user.upsert({
+      where: { email: seedAdminEmail },
+      create: {
+        email: seedAdminEmail,
+        passwordHash,
+        role: "ADMIN",
+        displayName: "Admin",
+        organizationId: organization.id,
+      },
+      update: {
         passwordHash,
         role: "ADMIN",
         displayName: "Admin",
