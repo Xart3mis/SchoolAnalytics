@@ -88,6 +88,7 @@ export function AtRiskTable({
     [yearId]
   );
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable({
     data,
     columns,
