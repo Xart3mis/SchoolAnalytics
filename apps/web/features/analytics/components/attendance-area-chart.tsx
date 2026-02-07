@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import {
   CartesianGrid,
   Legend,
@@ -26,7 +27,7 @@ const SERIES = [
   { key: "criterionD", label: "Criterion D", color: "var(--chart-4)" },
 ] as const;
 
-export function PerformanceAreaChart({ data }: PerformanceAreaChartProps) {
+function PerformanceAreaChartComponent({ data }: PerformanceAreaChartProps) {
   return (
     <div className="h-64 w-full">
       <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
@@ -67,3 +68,19 @@ export function PerformanceAreaChart({ data }: PerformanceAreaChartProps) {
     </div>
   );
 }
+
+export const PerformanceAreaChart = React.memo(
+  PerformanceAreaChartComponent,
+  (prev, next) =>
+    prev.data.length === next.data.length &&
+    prev.data.every((point, index) => {
+      const nextPoint = next.data[index];
+      return (
+        point.label === nextPoint?.label &&
+        point.criterionA === nextPoint?.criterionA &&
+        point.criterionB === nextPoint?.criterionB &&
+        point.criterionC === nextPoint?.criterionC &&
+        point.criterionD === nextPoint?.criterionD
+      );
+    })
+);

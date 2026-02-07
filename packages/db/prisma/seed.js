@@ -6,7 +6,7 @@ dotenv.config({ path: path.resolve(__dirname, "../../../.env"), quiet: true });
 dotenv.config({ quiet: true });
 
 const { randomUUID } = require("crypto");
-const bcrypt = require("bcryptjs");
+const bcrypt = require("bcrypt");
 const { PrismaClient } = require("../src/generated/client");
 const { PrismaPg } = require("@prisma/adapter-pg");
 const pg = require("pg");
@@ -122,24 +122,38 @@ function pickFrom(values, seed) {
 }
 
 async function main() {
-  const q = (id) => `"${String(id).replace(/"/g, '""')}"`;
+  await prisma.$executeRaw`
+    DO $$
+    DECLARE table_name text;
+    BEGIN
+      FOR table_name IN
+        SELECT tablename
+        FROM pg_tables
+        WHERE schemaname = 'public'
+          AND tablename NOT LIKE '_prisma%'
+      LOOP
+        EXECUTE format('TRUNCATE TABLE %I.%I CASCADE', 'public', table_name);
+      END LOOP;
+    END
+    $$;
+  `;
 
-  for (const { tablename } of await prisma.$queryRawUnsafe(
-    `SELECT tablename FROM pg_tables WHERE schemaname='public'`
-  )) {
-    if (!q(tablename).includes("prisma")) {
-      await prisma.$executeRawUnsafe(`TRUNCATE TABLE ${q(tablename)} CASCADE;`);
-    }
-  }
-
-  for (const { relname } of await prisma.$queryRawUnsafe(
-    `SELECT c.relname
-     FROM pg_class AS c
-     JOIN pg_namespace AS n ON c.relnamespace = n.oid
-     WHERE c.relkind='S' AND n.nspname='public';`
-  )) {
-    await prisma.$executeRawUnsafe(`ALTER SEQUENCE ${q(relname)} RESTART WITH 1;`);
-  }
+  await prisma.$executeRaw`
+    DO $$
+    DECLARE sequence_name text;
+    BEGIN
+      FOR sequence_name IN
+        SELECT c.relname
+        FROM pg_class AS c
+        JOIN pg_namespace AS n ON c.relnamespace = n.oid
+        WHERE c.relkind = 'S'
+          AND n.nspname = 'public'
+      LOOP
+        EXECUTE format('ALTER SEQUENCE %I.%I RESTART WITH 1', 'public', sequence_name);
+      END LOOP;
+    END
+    $$;
+  `;
 
   const organization = await prisma.organization.create({
     data: { name: "Sample School" },
