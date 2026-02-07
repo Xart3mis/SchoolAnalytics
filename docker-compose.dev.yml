@@ -5,7 +5,6 @@ services:
       dockerfile: Dockerfile
       target: dev-web
     environment:
-      NODE_ENV: development
       NEXT_TELEMETRY_DISABLED: 1
       CHOKIDAR_USEPOLLING: "true"
       WATCHPACK_POLLING: "true"
@@ -43,7 +42,6 @@ services:
       dockerfile: Dockerfile
       target: dev-worker
     environment:
-      NODE_ENV: development
       CHOKIDAR_USEPOLLING: "true"
     command: ["npm", "run", "dev", "--workspace", "@school-analytics/worker"]
     develop:
@@ -76,7 +74,6 @@ services:
       dockerfile: Dockerfile
       target: dev-scheduler
     environment:
-      NODE_ENV: development
       CHOKIDAR_USEPOLLING: "true"
     command: ["npm", "run", "dev", "--workspace", "@school-analytics/scheduler"]
     develop:
