@@ -53,31 +53,37 @@ const SUBJECTS = [
 ];
 
 const SEED_STUDENTS = [
-  { name: "Avery Chen", gradeLevel: "Grade 9" },
-  { name: "Noah Kim", gradeLevel: "Grade 9" },
-  { name: "Isla Nguyen", gradeLevel: "Grade 9" },
-  { name: "Mateo Rivera", gradeLevel: "Grade 9" },
-  { name: "Lina Hassan", gradeLevel: "Grade 9" },
-  { name: "Leo Sullivan", gradeLevel: "Grade 9" },
-  { name: "Jordan Patel", gradeLevel: "Grade 10" },
-  { name: "Mia Torres", gradeLevel: "Grade 10" },
-  { name: "Daniel Okafor", gradeLevel: "Grade 10" },
-  { name: "Aria Brooks", gradeLevel: "Grade 10" },
-  { name: "Ethan Park", gradeLevel: "Grade 10" },
-  { name: "Sofia Diaz", gradeLevel: "Grade 10" },
-  { name: "Riley Morgan", gradeLevel: "Grade 11" },
-  { name: "Owen Campbell", gradeLevel: "Grade 11" },
-  { name: "Zara Ibrahim", gradeLevel: "Grade 11" },
-  { name: "Lucas Silva", gradeLevel: "Grade 11" },
-  { name: "Nina George", gradeLevel: "Grade 11" },
-  { name: "Kai Johnson", gradeLevel: "Grade 11" },
-  { name: "Samira Ali", gradeLevel: "Grade 12" },
-  { name: "Hugo Martin", gradeLevel: "Grade 12" },
-  { name: "Priya Shah", gradeLevel: "Grade 12" },
-  { name: "Elena Rossi", gradeLevel: "Grade 12" },
-  { name: "Adam Clarke", gradeLevel: "Grade 12" },
-  { name: "Maya Ahmed", gradeLevel: "Grade 12" },
-  { name: "Evan Brooks", gradeLevel: "Grade 9" },
+  { name: "Avery Chen", gradeLevel: "MYP 1" },
+  { name: "Noah Kim", gradeLevel: "MYP 1" },
+  { name: "Isla Nguyen", gradeLevel: "MYP 1" },
+  { name: "Mateo Rivera", gradeLevel: "MYP 1" },
+  { name: "Lina Hassan", gradeLevel: "MYP 1" },
+  { name: "Leo Sullivan", gradeLevel: "MYP 2" },
+  { name: "Jordan Patel", gradeLevel: "MYP 2" },
+  { name: "Mia Torres", gradeLevel: "MYP 2" },
+  { name: "Daniel Okafor", gradeLevel: "MYP 2" },
+  { name: "Aria Brooks", gradeLevel: "MYP 2" },
+  { name: "Ethan Park", gradeLevel: "MYP 3" },
+  { name: "Sofia Diaz", gradeLevel: "MYP 3" },
+  { name: "Riley Morgan", gradeLevel: "MYP 3" },
+  { name: "Owen Campbell", gradeLevel: "MYP 3" },
+  { name: "Zara Ibrahim", gradeLevel: "MYP 3" },
+  { name: "Lucas Silva", gradeLevel: "MYP 4" },
+  { name: "Nina George", gradeLevel: "MYP 4" },
+  { name: "Kai Johnson", gradeLevel: "MYP 4" },
+  { name: "Samira Ali", gradeLevel: "MYP 4" },
+  { name: "Hugo Martin", gradeLevel: "MYP 4" },
+  { name: "Priya Shah", gradeLevel: "MYP 5" },
+  { name: "Elena Rossi", gradeLevel: "MYP 5" },
+  { name: "Adam Clarke", gradeLevel: "MYP 5" },
+  { name: "Maya Ahmed", gradeLevel: "MYP 5" },
+  { name: "Evan Brooks", gradeLevel: "MYP 5" },
+];
+
+const ACADEMIC_YEARS = [
+  { name: "2024-2025", startDate: "2024-08-15", endDate: "2025-06-15" },
+  { name: "2023-2024", startDate: "2023-08-15", endDate: "2024-06-15" },
+  { name: "2025-2026", startDate: "2025-08-15", endDate: "2026-06-15" },
 ];
 
 const COURSE_VARIANTS = ["Core", "Applied", "Inquiry", "Studio"];
@@ -159,35 +165,37 @@ async function main() {
     data: { name: "Sample School" },
   });
 
-  const academicYear = await prisma.academicYear.create({
-    data: {
-      name: "2025-2026",
-      startDate: new Date("2025-08-15"),
-      endDate: new Date("2026-06-15"),
-      organizationId: organization.id,
-    },
-  });
-
-  const termDefinitions = [
-    { name: "T1", startDate: new Date("2025-08-15"), endDate: new Date("2025-11-30") },
-    { name: "T2", startDate: new Date("2025-12-01"), endDate: new Date("2026-03-15") },
-    { name: "T3", startDate: new Date("2026-03-16"), endDate: new Date("2026-06-15") },
-  ];
-
   const terms = [];
-  for (const term of termDefinitions) {
-    terms.push(
-      await prisma.academicTerm.create({
-        data: {
-          ...term,
-          academicYearId: academicYear.id,
-        },
-      })
-    );
+  for (const academicYearSeed of ACADEMIC_YEARS) {
+    const academicYear = await prisma.academicYear.create({
+      data: {
+        name: academicYearSeed.name,
+        startDate: new Date(academicYearSeed.startDate),
+        endDate: new Date(academicYearSeed.endDate),
+        organizationId: organization.id,
+      },
+    });
+    const startYear = Number(academicYearSeed.name.slice(0, 4));
+    const termDefinitions = [
+      { name: "T1", startDate: new Date(`${startYear}-08-15`), endDate: new Date(`${startYear}-11-30`) },
+      { name: "T2", startDate: new Date(`${startYear}-12-01`), endDate: new Date(`${startYear + 1}-03-15`) },
+      { name: "T3", startDate: new Date(`${startYear + 1}-03-16`), endDate: new Date(`${startYear + 1}-06-15`) },
+    ];
+
+    for (const term of termDefinitions) {
+      terms.push(
+        await prisma.academicTerm.create({
+          data: {
+            ...term,
+            academicYearId: academicYear.id,
+          },
+        })
+      );
+    }
   }
 
   const gradeLevels = [];
-  for (const grade of [9, 10, 11, 12]) {
+  for (const grade of [1, 2, 3, 4, 5]) {
     gradeLevels.push(
       await prisma.gradeLevel.create({
         data: {
@@ -235,10 +243,10 @@ async function main() {
       const gradeLabel = gradeLevels.find((level) => level.id === course.gradeLevelId)?.name ?? "";
       const classSection = await prisma.classSection.create({
         data: {
-          name: `Grade ${gradeLabel} ${course.name} - ${term.name}`,
+          name: `MYP ${gradeLabel} ${course.name} - ${term.name}`,
           organizationId: organization.id,
           courseId: course.id,
-          academicYearId: academicYear.id,
+          academicYearId: term.academicYearId,
           academicTermId: term.id,
         },
       });
@@ -289,7 +297,7 @@ async function main() {
   for (const [index, student] of SEED_STUDENTS.entries()) {
     const [firstName, ...lastNameParts] = student.name.split(" ");
     const lastName = lastNameParts.join(" ") || null;
-    const gradeNumber = Number(student.gradeLevel.replace("Grade ", ""));
+    const gradeNumber = Number(student.gradeLevel.replace("MYP ", ""));
     const gradeLevel = gradeLevelByName.get(String(gradeNumber));
     if (!gradeLevel) continue;
 
@@ -336,6 +344,8 @@ async function main() {
   for (const classSection of classSections) {
     const course = courseById.get(classSection.courseId);
     if (!course) continue;
+    const term = terms.find((t) => t.id === classSection.academicTermId);
+    if (!term) continue;
     const assignments = assignmentsByClassSection.get(classSection.id) ?? [];
     const studentsForGrade = students.filter(
       (student) => student.gradeLevelId === course.gradeLevelId
@@ -361,7 +371,7 @@ async function main() {
           grade,
           feedback: pickFrom(FEEDBACK_BANK, seed),
           isSubmitted: true,
-          submittedAt: new Date(Date.UTC(2026, resolvedTermIndex * 3 + 1, (seed % 24) + 1)),
+          submittedAt: new Date(term.startDate.getTime() + ((seed % 28) + 1) * 24 * 60 * 60 * 1000),
         });
 
         const criteria = ["A", "B", "C", "D"];
