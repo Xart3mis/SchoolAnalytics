@@ -1,0 +1,104 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev-web
+    environment:
+      NODE_ENV: development
+      NEXT_TELEMETRY_DISABLED: 1
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
+    command: ["npm", "run", "dev", "--workspace", "@school-analytics/web"]
+    develop:
+      watch:
+        - action: sync
+          path: ./apps/web
+          target: /workspace/apps/web
+          initial_sync: true
+          ignore:
+            - node_modules/
+            - .next/
+        - action: sync
+          path: ./packages/db
+          target: /workspace/packages/db
+          initial_sync: true
+          ignore:
+            - node_modules/
+            - src/generated/
+        - action: rebuild
+          path: ./package.json
+        - action: rebuild
+          path: ./package-lock.json
+        - action: rebuild
+          path: ./apps/web/package.json
+        - action: rebuild
+          path: ./packages/db/package.json
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev-worker
+    environment:
+      NODE_ENV: development
+      CHOKIDAR_USEPOLLING: "true"
+    command: ["npm", "run", "dev", "--workspace", "@school-analytics/worker"]
+    develop:
+      watch:
+        - action: sync
+          path: ./apps/worker
+          target: /workspace/apps/worker
+          initial_sync: true
+          ignore:
+            - node_modules/
+        - action: sync
+          path: ./packages/db
+          target: /workspace/packages/db
+          initial_sync: true
+          ignore:
+            - node_modules/
+            - src/generated/
+        - action: rebuild
+          path: ./package.json
+        - action: rebuild
+          path: ./package-lock.json
+        - action: rebuild
+          path: ./apps/worker/package.json
+        - action: rebuild
+          path: ./packages/db/package.json
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev-scheduler
+    environment:
+      NODE_ENV: development
+      CHOKIDAR_USEPOLLING: "true"
+    command: ["npm", "run", "dev", "--workspace", "@school-analytics/scheduler"]
+    develop:
+      watch:
+        - action: sync
+          path: ./apps/scheduler
+          target: /workspace/apps/scheduler
+          initial_sync: true
+          ignore:
+            - node_modules/
+        - action: sync
+          path: ./packages/db
+          target: /workspace/packages/db
+          initial_sync: true
+          ignore:
+            - node_modules/
+            - src/generated/
+        - action: rebuild
+          path: ./package.json
+        - action: rebuild
+          path: ./package-lock.json
+        - action: rebuild
+          path: ./apps/scheduler/package.json
+        - action: rebuild
+          path: ./packages/db/package.json
