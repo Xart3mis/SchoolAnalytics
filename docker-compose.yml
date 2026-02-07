@@ -63,7 +63,6 @@ services:
       target: web
     restart: unless-stopped
     environment:
-      NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL:-postgresql://school:schoolpass@pgbouncer:6432/school_analytics}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       AUTH_COOKIE_NAME: ${AUTH_COOKIE_NAME:-school_analytics_session}
@@ -84,7 +83,6 @@ services:
       target: worker
     restart: unless-stopped
     environment:
-      NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL:-postgresql://school:schoolpass@pgbouncer:6432/school_analytics}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       POLL_QUEUE_NAME: ${POLL_QUEUE_NAME:-polling}
@@ -102,7 +100,6 @@ services:
       target: scheduler
     restart: unless-stopped
     environment:
-      NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL:-postgresql://school:schoolpass@pgbouncer:6432/school_analytics}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       POLL_QUEUE_NAME: ${POLL_QUEUE_NAME:-polling}
