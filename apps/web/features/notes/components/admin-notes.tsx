@@ -30,11 +30,7 @@ export function AdminNotes({ pageKey }: AdminNotesProps) {
   const [pendingDelete, setPendingDelete] = useState<Note | null>(null);
   const modalRef = useRef<HTMLDivElement | null>(null);
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = typeof document !== "undefined";
 
   useEffect(() => {
     if (!pendingDelete) return;
@@ -174,6 +170,7 @@ export function AdminNotes({ pageKey }: AdminNotesProps) {
                         variant="ghost"
                         onClick={() => setPendingDelete(note)}
                         disabled={deletingId === note.id}
+                        aria-label={`Delete note from ${note.author}`}
                         className="h-6 px-2 text-[10px] uppercase tracking-[0.2em]"
                       >
                         {deletingId === note.id ? "Deleting..." : "Delete"}
@@ -225,6 +222,7 @@ export function AdminNotes({ pageKey }: AdminNotesProps) {
                       setPendingDelete(null);
                     }}
                     disabled={deletingId === pendingDelete.id}
+                    aria-label={`Confirm delete note from ${pendingDelete.author}`}
                     className="bg-[color:var(--danger)] text-white hover:brightness-95"
                   >
                     {deletingId === pendingDelete.id ? "Deleting..." : "Delete"}
