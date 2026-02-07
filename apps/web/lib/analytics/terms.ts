@@ -27,3 +27,23 @@ export async function getAcademicYearTerms(academicYearId: string) {
     orderBy: { startDate: "asc" },
   });
 }
+
+export async function resolveSelectedTerm({
+  yearId,
+  termId,
+}: {
+  yearId?: string;
+  termId?: string;
+}) {
+  if (termId) {
+    const byTerm = await getActiveTerm(termId);
+    if (byTerm && (!yearId || byTerm.academicYearId === yearId)) {
+      return byTerm;
+    }
+  }
+  if (yearId) {
+    const byYear = await getActiveTermForYear(yearId);
+    if (byYear) return byYear;
+  }
+  return getActiveTerm();
+}
