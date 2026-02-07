@@ -22,19 +22,104 @@ const prisma = new PrismaClient({
 });
 
 const SUBJECTS = [
-  { code: "MATH", name: "Mathematics" },
-  { code: "ENG", name: "English" },
-  { code: "SCI", name: "Science" },
-  { code: "HIST", name: "History" },
+  {
+    code: "MATH",
+    name: "Mathematics",
+    assignmentTypes: ["FORMATIVE", "PROJECT", "SUMMATIVE"],
+    topics: ["Patterns", "Algebra", "Modeling", "Data"],
+    scoreBias: 1,
+  },
+  {
+    code: "ENG",
+    name: "English",
+    assignmentTypes: ["FORMATIVE", "PROJECT", "HOMEWORK"],
+    topics: ["Argument", "Analysis", "Creative Writing", "Presentation"],
+    scoreBias: 0,
+  },
+  {
+    code: "SCI",
+    name: "Science",
+    assignmentTypes: ["PROJECT", "FORMATIVE", "SUMMATIVE"],
+    topics: ["Investigation", "Lab Report", "Systems", "Experiment"],
+    scoreBias: 1,
+  },
+  {
+    code: "HIST",
+    name: "History",
+    assignmentTypes: ["FORMATIVE", "PROJECT", "HOMEWORK"],
+    topics: ["Evidence", "Chronology", "Case Study", "Debate"],
+    scoreBias: -1,
+  },
 ];
 
 const SEED_STUDENTS = [
   { name: "Avery Chen", gradeLevel: "Grade 9" },
+  { name: "Noah Kim", gradeLevel: "Grade 9" },
+  { name: "Isla Nguyen", gradeLevel: "Grade 9" },
+  { name: "Mateo Rivera", gradeLevel: "Grade 9" },
+  { name: "Lina Hassan", gradeLevel: "Grade 9" },
+  { name: "Leo Sullivan", gradeLevel: "Grade 9" },
   { name: "Jordan Patel", gradeLevel: "Grade 10" },
+  { name: "Mia Torres", gradeLevel: "Grade 10" },
+  { name: "Daniel Okafor", gradeLevel: "Grade 10" },
+  { name: "Aria Brooks", gradeLevel: "Grade 10" },
+  { name: "Ethan Park", gradeLevel: "Grade 10" },
+  { name: "Sofia Diaz", gradeLevel: "Grade 10" },
   { name: "Riley Morgan", gradeLevel: "Grade 11" },
+  { name: "Owen Campbell", gradeLevel: "Grade 11" },
+  { name: "Zara Ibrahim", gradeLevel: "Grade 11" },
+  { name: "Lucas Silva", gradeLevel: "Grade 11" },
+  { name: "Nina George", gradeLevel: "Grade 11" },
+  { name: "Kai Johnson", gradeLevel: "Grade 11" },
   { name: "Samira Ali", gradeLevel: "Grade 12" },
+  { name: "Hugo Martin", gradeLevel: "Grade 12" },
+  { name: "Priya Shah", gradeLevel: "Grade 12" },
+  { name: "Elena Rossi", gradeLevel: "Grade 12" },
+  { name: "Adam Clarke", gradeLevel: "Grade 12" },
+  { name: "Maya Ahmed", gradeLevel: "Grade 12" },
   { name: "Evan Brooks", gradeLevel: "Grade 9" },
 ];
+
+const COURSE_VARIANTS = ["Core", "Applied", "Inquiry", "Studio"];
+const FEEDBACK_BANK = [
+  "Consistent effort with clear growth.",
+  "Strong understanding shown in class and tasks.",
+  "Improving steadily; next step is deeper analysis.",
+  "Good progress, especially in independent work.",
+  "Creative thinking stands out in this submission.",
+  "Needs more precision, but reasoning is improving.",
+  "Confident performance with strong communication.",
+  "Developing well; focus on evidence and clarity.",
+];
+
+function normalizeSeedEnv(value) {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function hashValue(input) {
+  let hash = 0;
+  for (let index = 0; index < input.length; index += 1) {
+    hash = (hash * 31 + input.charCodeAt(index)) >>> 0;
+  }
+  return hash;
+}
+
+function pickFrom(values, seed) {
+  return values[seed % values.length];
+}
 
 async function main() {
   const q = (id) => `"${String(id).replace(/"/g, '""')}"`;
@@ -100,12 +185,16 @@ async function main() {
 
   const gradeLevelByName = new Map(gradeLevels.map((level) => [level.name, level]));
   const courses = [];
-  for (const level of gradeLevels) {
-    for (const [subjectIndex, subject] of SUBJECTS.entries()) {
+  const coursesPerGrade = 2;
+  for (const [gradeIndex, level] of gradeLevels.entries()) {
+    for (let slot = 0; slot < coursesPerGrade; slot += 1) {
+      const subjectIndex = (gradeIndex + slot * 2) % SUBJECTS.length;
+      const subject = SUBJECTS[subjectIndex];
+      const variant = COURSE_VARIANTS[(gradeIndex + slot) % COURSE_VARIANTS.length];
       const course = await prisma.course.create({
         data: {
-          name: subject.name,
-          code: subject.code,
+          name: `${subject.name} ${variant}`,
+          code: `${subject.code}-${level.name}-${slot + 1}`,
           organizationId: organization.id,
           gradeLevelId: level.id,
         },
@@ -113,8 +202,11 @@ async function main() {
       courses.push({
         id: course.id,
         name: course.name,
+        code: course.code,
         gradeLevelId: level.id,
         subjectIndex,
+        subject,
+        courseIndex: courses.length,
       });
     }
   }
@@ -153,16 +245,25 @@ async function main() {
     if (!course) continue;
     const term = terms.find((t) => t.id === classSection.academicTermId);
     if (!term) continue;
+    const termIndex = terms.findIndex((t) => t.id === classSection.academicTermId);
+    const resolvedTermIndex = termIndex < 0 ? 0 : termIndex;
     const assignments = [];
-    for (let index = 1; index <= 4; index += 1) {
-      const dueDate = new Date(term.startDate.getTime() + index * 7 * 24 * 60 * 60 * 1000);
+    const assignmentCount = 3 + ((course.courseIndex + resolvedTermIndex) % 3);
+    for (let index = 1; index <= assignmentCount; index += 1) {
+      const dueDate = new Date(term.startDate.getTime() + (5 + index * 9) * 24 * 60 * 60 * 1000);
+      const topic = pickFrom(course.subject.topics, course.courseIndex + index + resolvedTermIndex);
+      const assignmentType = pickFrom(
+        course.subject.assignmentTypes,
+        resolvedTermIndex + index + course.subjectIndex
+      );
+      const maxScore = 6 + ((course.subjectIndex + index + resolvedTermIndex) % 3);
       const created = await prisma.assignment.create({
         data: {
           classSectionId: classSection.id,
-          title: `${course.name} Checkpoint ${index}`,
-          type: "FORMATIVE",
+          title: `${course.code} ${topic} ${resolvedTermIndex + 1}.${index}`,
+          type: assignmentType,
           dueDate,
-          maxScore: 8,
+          maxScore,
         },
       });
       assignments.push({ id: created.id, index });
@@ -230,25 +331,42 @@ async function main() {
 
     for (const assignment of assignments) {
       for (const student of studentsForGrade) {
-        const base =
-          (student.index + course.subjectIndex + resolvedTermIndex + assignment.index) % 8;
+        const entrySeed = `${student.id}:${assignment.id}:${course.id}:${resolvedTermIndex}`;
+        const seed = hashValue(entrySeed);
+        const performanceBand = (student.index * 5 + course.courseIndex * 3 + resolvedTermIndex) % 6;
+        const scoreBase = 2 + performanceBand + course.subject.scoreBias;
         const gradeEntryId = randomUUID();
+        const score = clamp(scoreBase + ((seed % 5) - 2), 1, 8);
+        const grade =
+          score >= 7 ? "A" : score >= 5 ? "B" : score >= 3 ? "C" : score >= 2 ? "D" : "E";
         gradeEntries.push({
           id: gradeEntryId,
           studentId: student.id,
           assignmentId: assignment.id,
+          score,
+          grade,
+          feedback: pickFrom(FEEDBACK_BANK, seed),
           isSubmitted: true,
-          submittedAt: new Date(),
+          submittedAt: new Date(Date.UTC(2026, resolvedTermIndex * 3 + 1, (seed % 24) + 1)),
         });
 
         const criteria = ["A", "B", "C", "D"];
         criteria.forEach((criterion, criterionIndex) => {
-          const scoreBase = (base + criterionIndex * 2) % 8;
+          const criterionSeed = hashValue(`${entrySeed}:${criterion}`);
+          const criterionScore = clamp(
+            score +
+              criterionIndex -
+              1 +
+              ((criterionSeed % 3) - 1) +
+              ((course.subjectIndex + resolvedTermIndex) % 2),
+            1,
+            8
+          );
           gradeEntryCriteria.push({
             id: randomUUID(),
             gradeEntryId,
             criterion,
-            score: 1 + scoreBase,
+            score: criterionScore,
           });
         });
       }
@@ -263,13 +381,21 @@ async function main() {
     await prisma.gradeEntryCriterion.createMany({ data: gradeEntryCriteria });
   }
 
-  const adminEmail = process.env.SEED_ADMIN_EMAIL?.trim();
-  const adminPassword = process.env.SEED_ADMIN_PASSWORD;
+  const adminEmailRaw = normalizeSeedEnv(process.env.SEED_ADMIN_EMAIL);
+  const adminPassword = normalizeSeedEnv(process.env.SEED_ADMIN_PASSWORD);
+  const adminEmail = adminEmailRaw?.toLowerCase();
   if (adminEmail && adminPassword) {
     const passwordHash = await bcrypt.hash(adminPassword, 12);
-    await prisma.user.create({
-      data: {
-        email: adminEmail.toLowerCase(),
+    await prisma.user.upsert({
+      where: { email: adminEmail },
+      create: {
+        email: adminEmail,
+        passwordHash,
+        role: "ADMIN",
+        displayName: "Admin",
+        organizationId: organization.id,
+      },
+      update: {
         passwordHash,
         role: "ADMIN",
         displayName: "Admin",

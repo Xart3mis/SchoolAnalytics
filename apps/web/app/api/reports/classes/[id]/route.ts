@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 
 import { getSessionFromCookies } from "@/lib/auth/session";
-import { mypCriteriaTotalSql, mypFinalGradeSql } from "@/lib/analytics/sql";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@school-analytics/db/client";
 
@@ -39,15 +38,16 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     return NextResponse.json({ error: "No term data." }, { status: 400 });
   }
 
-  const totalExpression = mypCriteriaTotalSql();
-  const finalGradeExpression = mypFinalGradeSql(totalExpression);
   const rows = await prisma.$queryRaw<
     Array<{ id: string; fullName: string; gradeLevel: number; avgScore: number }>
   >(Prisma.sql`
-    WITH final_grades AS (
+    WITH student_course AS (
       SELECT ge."studentId",
              cs."courseId" AS "courseId",
-             ${finalGradeExpression}::int AS "finalGrade"
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'A'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionA",
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'B'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionB",
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'C'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionC",
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'D'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionD"
       FROM "GradeEntry" ge
       JOIN "GradeEntryCriterion" gec ON gec."gradeEntryId" = ge."id"
       JOIN "Assignment" a ON a."id" = ge."assignmentId"
@@ -56,16 +56,16 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
       GROUP BY ge."studentId", cs."courseId"
     ),
     student_stats AS (
-      SELECT "studentId", AVG("finalGrade")::float AS "avgGrade"
-      FROM final_grades
+      SELECT "studentId", AVG(("criterionA" + "criterionB" + "criterionC" + "criterionD") / 4.0)::float AS "avgGrade"
+      FROM student_course
       GROUP BY "studentId"
     ),
     grade_levels AS (
-      SELECT final_grades."studentId", MIN(gl."name")::int AS "gradeLevel"
-      FROM final_grades
-      JOIN "Course" c ON c."id" = final_grades."courseId"
+      SELECT student_course."studentId", MIN(gl."name")::int AS "gradeLevel"
+      FROM student_course
+      JOIN "Course" c ON c."id" = student_course."courseId"
       JOIN "GradeLevel" gl ON gl."id" = c."gradeLevelId"
-      GROUP BY final_grades."studentId"
+      GROUP BY student_course."studentId"
     )
     SELECT s."id",
            COALESCE(u."displayName", CONCAT_WS(' ', s."firstName", s."lastName"), u."email") AS "fullName",
@@ -78,7 +78,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     ORDER BY "avgScore" ASC
   `);
 
-  const header = toCsvRow(["Student ID", "Name", "Grade", "Average Final Grade"]);
+  const header = toCsvRow(["Student ID", "Name", "Grade", "Criterion Average (0-8)"]);
   const lines = rows.map((row) =>
     toCsvRow([row.id, row.fullName, row.gradeLevel, Number(row.avgScore).toFixed(2)])
   );
