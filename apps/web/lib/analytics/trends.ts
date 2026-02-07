@@ -51,6 +51,15 @@ type AssignmentRow = {
   subjectName: string;
 };
 
+/**
+ * Builds a chronological trend line composed of:
+ * 1) a synthetic start marker,
+ * 2) assignment points sorted by due/created date within each term,
+ * 3) a term boundary marker after each term.
+ *
+ * This shape allows chart consumers to render assignment progression while
+ * preserving explicit term transitions.
+ */
 function buildAssignmentTrend(
   rows: AssignmentRow[],
   terms: Array<{ id: string; name: string }>

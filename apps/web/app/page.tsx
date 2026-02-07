@@ -19,15 +19,27 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   await requireSession();
   const resolvedSearchParams = await searchParams;
   const yearId = resolvedSearchParams?.year;
+  const requestedPage = Math.max(1, Number(resolvedSearchParams?.page ?? "1"));
+  const pageSize = 20;
   const term = await resolveSelectedTerm({
     yearId,
     termId: resolvedSearchParams?.term,
   });
-  const data = await getDashboardData(term?.id);
-  const page = Number(resolvedSearchParams?.page ?? "1");
-  const pageSize = 20;
-  const start = (page - 1) * pageSize;
-  const atRiskPage = data.atRisk.slice(start, start + pageSize);
+  const initialData = await getDashboardData({
+    termId: term?.id,
+    atRiskPage: requestedPage,
+    atRiskPageSize: pageSize,
+  });
+  const totalPages = Math.max(1, Math.ceil(initialData.atRiskTotalCount / pageSize));
+  const page = Math.min(requestedPage, totalPages);
+  const data =
+    page === requestedPage
+      ? initialData
+      : await getDashboardData({
+          termId: term?.id,
+          atRiskPage: page,
+          atRiskPageSize: pageSize,
+        });
   const queryParams = new URLSearchParams();
   if (yearId) {
     queryParams.set("year", yearId);
@@ -70,10 +82,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
       <section>
         <AtRiskTable
-          data={atRiskPage}
+          data={data.atRisk}
           page={page}
           pageSize={pageSize}
-          totalCount={data.atRisk.length}
+          totalCount={data.atRiskTotalCount}
           queryString={queryParams.toString()}
           yearId={yearId ?? term?.academicYearId}
         />

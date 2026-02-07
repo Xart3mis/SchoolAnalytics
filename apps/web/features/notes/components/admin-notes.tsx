@@ -31,6 +31,8 @@ export function AdminNotes({ pageKey }: AdminNotesProps) {
   const modalRef = useRef<HTMLDivElement | null>(null);
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
 
+  const mounted = typeof document !== "undefined";
+
   useEffect(() => {
     if (!pendingDelete) return;
 
@@ -169,6 +171,7 @@ export function AdminNotes({ pageKey }: AdminNotesProps) {
                         variant="ghost"
                         onClick={() => setPendingDelete(note)}
                         disabled={deletingId === note.id}
+                        aria-label={`Delete note from ${note.author}`}
                         className="h-6 px-2 text-[10px] uppercase tracking-[0.2em]"
                       >
                         {deletingId === note.id ? "Deleting..." : "Delete"}
@@ -182,53 +185,54 @@ export function AdminNotes({ pageKey }: AdminNotesProps) {
           </div>
         )}
       </CardContent>
-      {pendingDelete
+      {mounted && pendingDelete
         ? createPortal(
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 px-4"
+            onClick={() => setPendingDelete(null)}
+          >
             <div
-              className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 px-4"
-              onClick={() => setPendingDelete(null)}
+              ref={modalRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="delete-note-title"
+              className="w-full max-w-sm rounded-xl border border-[color:var(--border)] bg-[color:var(--surface)] p-5 shadow-[0_24px_60px_-35px_rgba(0,14,20,0.7)]"
+              onClick={(event) => event.stopPropagation()}
             >
-              <div
-                ref={modalRef}
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="delete-note-title"
-                className="w-full max-w-sm rounded-xl border border-[color:var(--border)] bg-[color:var(--surface)] p-5 shadow-[0_24px_60px_-35px_rgba(0,14,20,0.7)]"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <div id="delete-note-title" className="text-sm font-semibold text-[color:var(--text)]">
-                  Delete note?
-                </div>
-                <p className="mt-2 text-xs text-[color:var(--text-muted)]">
-                  This will permanently remove the note: “{pendingDelete.content.slice(0, 80)}
-                  {pendingDelete.content.length > 80 ? "…" : ""}”
-                </p>
-                <div className="mt-4 flex items-center justify-end gap-2">
-                  <Button
-                    ref={cancelButtonRef}
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setPendingDelete(null)}
-                    disabled={deletingId === pendingDelete.id}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={async () => {
-                      await handleDelete(pendingDelete.id);
-                      setPendingDelete(null);
-                    }}
-                    disabled={deletingId === pendingDelete.id}
-                    className="bg-[color:var(--danger)] text-white hover:brightness-95"
-                  >
-                    {deletingId === pendingDelete.id ? "Deleting..." : "Delete"}
-                  </Button>
-                </div>
+              <div id="delete-note-title" className="text-sm font-semibold text-[color:var(--text)]">
+                Delete note?
               </div>
-            </div>,
-            document.body
-          )
+              <p className="mt-2 text-xs text-[color:var(--text-muted)]">
+                This will permanently remove the note: “{pendingDelete.content.slice(0, 80)}
+                {pendingDelete.content.length > 80 ? "…" : ""}”
+              </p>
+              <div className="mt-4 flex items-center justify-end gap-2">
+                <Button
+                  ref={cancelButtonRef}
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setPendingDelete(null)}
+                  disabled={deletingId === pendingDelete.id}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={async () => {
+                    await handleDelete(pendingDelete.id);
+                    setPendingDelete(null);
+                  }}
+                  disabled={deletingId === pendingDelete.id}
+                  aria-label={`Confirm delete note from ${pendingDelete.author}`}
+                  className="bg-[color:var(--danger)] text-white hover:brightness-95"
+                >
+                  {deletingId === pendingDelete.id ? "Deleting..." : "Delete"}
+                </Button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )
         : null}
     </Card>
   );

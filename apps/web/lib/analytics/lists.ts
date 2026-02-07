@@ -50,7 +50,7 @@ export async function getStudentList({
       : Prisma.empty;
 
   const rows = await prisma.$queryRaw<
-    Array<{ id: string; fullName: string; gradeLevel: number; averageScore: number }>
+    Array<{ id: string; fullName: string; gradeLevel: number; averageScore: number; totalCount: number }>
   >(Prisma.sql`
     WITH student_course AS (
       SELECT ge."studentId",
@@ -83,7 +83,8 @@ export async function getStudentList({
     SELECT s."id",
            COALESCE(u."displayName", CONCAT_WS(' ', s."firstName", s."lastName"), u."email") AS "fullName",
            grade_levels."gradeLevel" AS "gradeLevel",
-           student_stats."avgGrade"::float AS "averageScore"
+           student_stats."avgGrade"::float AS "averageScore",
+           COUNT(*) OVER()::int AS "totalCount"
     FROM student_stats
     JOIN grade_levels ON grade_levels."studentId" = student_stats."studentId"
     JOIN "Student" s ON s."id" = student_stats."studentId"
@@ -95,52 +96,18 @@ export async function getStudentList({
     LIMIT ${pageSize} OFFSET ${offset}
   `);
 
-  const total = await prisma.$queryRaw<{ count: number }[]>(Prisma.sql`
-    WITH student_course AS (
-      SELECT ge."studentId",
-             cs."courseId" AS "courseId",
-             COALESCE(MAX(CASE WHEN gec."criterion" = 'A'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionA",
-             COALESCE(MAX(CASE WHEN gec."criterion" = 'B'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionB",
-             COALESCE(MAX(CASE WHEN gec."criterion" = 'C'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionC",
-             COALESCE(MAX(CASE WHEN gec."criterion" = 'D'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionD"
-      FROM "GradeEntry" ge
-      JOIN "GradeEntryCriterion" gec ON gec."gradeEntryId" = ge."id"
-      JOIN "Assignment" a ON a."id" = ge."assignmentId"
-      JOIN "ClassSection" cs ON cs."id" = a."classSectionId"
-      WHERE cs."academicTermId" = ${termId}
-      GROUP BY ge."studentId", cs."courseId"
-    ),
-    student_stats AS (
-      SELECT "studentId",
-             AVG(("criterionA" + "criterionB" + "criterionC" + "criterionD") / 4.0)::float AS "avgGrade"
-      FROM student_course
-      GROUP BY "studentId"
-    ),
-    grade_levels AS (
-      SELECT student_course."studentId",
-             MIN(NULLIF(regexp_replace(gl."name", '\D', '', 'g'), '')::int) AS "gradeLevel"
-      FROM student_course
-      JOIN "Course" c ON c."id" = student_course."courseId"
-      JOIN "GradeLevel" gl ON gl."id" = c."gradeLevelId"
-      GROUP BY student_course."studentId"
-    )
-    SELECT COUNT(*)::int AS count
-    FROM student_stats
-    JOIN grade_levels ON grade_levels."studentId" = student_stats."studentId"
-    JOIN "Student" s ON s."id" = student_stats."studentId"
-    JOIN "User" u ON u."id" = s."userId"
-    WHERE 1 = 1
-    ${searchClause}
-    ${gradeClause}
-  `);
-
   return {
-    rows: rows.map((row) => ({
-      ...row,
-      averageScore: Number(row.averageScore),
-      riskLevel: riskLevel(Number(row.averageScore)),
-    })) as StudentListRow[],
-    total: total[0]?.count ?? 0,
+    rows: rows.map((row) => {
+      const averageScore = Number(row.averageScore);
+      return {
+        id: row.id,
+        fullName: row.fullName,
+        gradeLevel: row.gradeLevel,
+        averageScore,
+        riskLevel: riskLevel(averageScore),
+      };
+    }),
+    total: rows[0]?.totalCount ?? 0,
   };
 }
 

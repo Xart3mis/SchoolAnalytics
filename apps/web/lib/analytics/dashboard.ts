@@ -47,6 +47,7 @@ export interface DashboardData {
   performanceTrend: CriterionTrendPoint[];
   gradeDistribution: DistributionSlice[];
   atRisk: AtRiskStudent[];
+  atRiskTotalCount: number;
   activeTermLabel: string;
   comparisons: {
     grades: ComparisonItem[];
@@ -61,7 +62,19 @@ function riskLevel(score: number) {
   return "Low";
 }
 
-export async function getDashboardData(termId?: string): Promise<DashboardData> {
+export async function getDashboardData({
+  termId,
+  atRiskPage = 1,
+  atRiskPageSize = 20,
+}: {
+  termId?: string;
+  atRiskPage?: number;
+  atRiskPageSize?: number;
+} = {}): Promise<DashboardData> {
+  const resolvedAtRiskPage = Math.max(1, atRiskPage);
+  const resolvedAtRiskPageSize = Math.max(1, atRiskPageSize);
+  const atRiskOffset = (resolvedAtRiskPage - 1) * resolvedAtRiskPageSize;
+
   const activeTerm = termId
     ? await prisma.academicTerm.findUnique({
         where: { id: termId },
@@ -78,6 +91,7 @@ export async function getDashboardData(termId?: string): Promise<DashboardData> 
       performanceTrend: [],
       gradeDistribution: [],
       atRisk: [],
+      atRiskTotalCount: 0,
       activeTermLabel: "No term data",
       comparisons: {
         grades: [],
@@ -191,7 +205,13 @@ export async function getDashboardData(termId?: string): Promise<DashboardData> 
     `);
 
   const atRiskRows = await prisma.$queryRaw<
-    { studentId: string; fullName: string; gradeLevel: number; avgScore: number }[]
+    Array<{
+      totalCount: number;
+      studentId: string | null;
+      fullName: string | null;
+      gradeLevel: number | null;
+      avgScore: number | null;
+    }>
   >(Prisma.sql`
     WITH student_course AS (
       SELECT ge."studentId",
@@ -219,18 +239,35 @@ export async function getDashboardData(termId?: string): Promise<DashboardData> 
       JOIN "Course" c ON c."id" = student_course."courseId"
       JOIN "GradeLevel" gl ON gl."id" = c."gradeLevelId"
       GROUP BY student_course."studentId"
+    ),
+    at_risk AS (
+      SELECT s."id" AS "studentId",
+             COALESCE(u."displayName", CONCAT_WS(' ', s."firstName", s."lastName"), u."email") AS "fullName",
+             grade_levels."gradeLevel" AS "gradeLevel",
+             student_stats."avgGrade"::float AS "avgScore"
+      FROM student_stats
+      JOIN grade_levels ON grade_levels."studentId" = student_stats."studentId"
+      JOIN "Student" s ON s."id" = student_stats."studentId"
+      JOIN "User" u ON u."id" = s."userId"
     )
-    SELECT s."id" AS "studentId",
-           COALESCE(u."displayName", CONCAT_WS(' ', s."firstName", s."lastName"), u."email") AS "fullName",
-           grade_levels."gradeLevel" AS "gradeLevel",
-           student_stats."avgGrade"::float AS "avgScore"
-    FROM student_stats
-    JOIN grade_levels ON grade_levels."studentId" = student_stats."studentId"
-    JOIN "Student" s ON s."id" = student_stats."studentId"
-    JOIN "User" u ON u."id" = s."userId"
-    ORDER BY "avgScore" ASC
-    LIMIT 60
+    SELECT totals."totalCount"::int AS "totalCount",
+           page."studentId",
+           page."fullName",
+           page."gradeLevel",
+           page."avgScore"
+    FROM (
+      SELECT COUNT(*)::int AS "totalCount"
+      FROM at_risk
+    ) totals
+    LEFT JOIN LATERAL (
+      SELECT *
+      FROM at_risk
+      ORDER BY "avgScore" ASC
+      LIMIT ${resolvedAtRiskPageSize}
+      OFFSET ${atRiskOffset}
+    ) page ON true
   `);
+  const atRiskTotalCount = atRiskRows[0]?.totalCount ?? 0;
 
   const [gradeComparisons, classComparisons, studentComparisons] = await Promise.all([
     prisma.$queryRaw<
@@ -400,13 +437,16 @@ export async function getDashboardData(termId?: string): Promise<DashboardData> 
       label: `Grade ${group.gradeLevel}`,
       value: group.count,
     })),
-    atRisk: atRiskRows.map((row) => ({
-      id: row.studentId,
-      name: row.fullName,
-      gradeLevel: `Grade ${row.gradeLevel}`,
-      averageScore: Number(row.avgScore),
-      riskLevel: riskLevel(Number(row.avgScore)),
-    })),
+    atRisk: atRiskRows
+      .filter((row) => row.studentId && row.fullName && row.gradeLevel !== null && row.avgScore !== null)
+      .map((row) => ({
+        id: row.studentId as string,
+        name: row.fullName as string,
+        gradeLevel: `Grade ${row.gradeLevel}`,
+        averageScore: Number(row.avgScore),
+        riskLevel: riskLevel(Number(row.avgScore)),
+      })),
+    atRiskTotalCount,
     activeTermLabel: `${activeTerm.academicYear.name} ${activeTerm.name}`,
     comparisons: {
       grades: gradeComparisons.map((item) => ({

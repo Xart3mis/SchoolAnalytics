@@ -31,7 +31,7 @@ export function AppHeader() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const [query, setQuery] = React.useState("");
+  const [query, setQuery] = React.useState(() => searchParams.get("q") ?? "");
   const [results, setResults] = React.useState<SearchResults>({ students: [], classes: [] });
   const [open, setOpen] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(false);
@@ -133,6 +133,11 @@ export function AppHeader() {
       window.clearTimeout(timeout);
     };
   }, [trimmedQuery]);
+
+  React.useEffect(() => {
+    const urlQuery = searchParams.get("q") ?? "";
+    setQuery((current) => (current === urlQuery ? current : urlQuery));
+  }, [searchParams]);
 
   const handleSelectYear = React.useCallback(
     (yearId: string) => {

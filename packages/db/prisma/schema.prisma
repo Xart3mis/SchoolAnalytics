@@ -89,6 +89,8 @@ model Session {
   expiresAt DateTime
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
 }
 
 model Student {
@@ -412,6 +414,8 @@ model Assignment {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([classSectionId, dueDate])
 }
 
 model GradeEntry {
@@ -434,6 +438,8 @@ model GradeEntry {
   updatedAt DateTime @updatedAt
 
   @@unique([studentId, assignmentId])
+  @@index([studentId])
+  @@index([assignmentId])
 }
 
 model GradeEntryCriterion {

@@ -37,10 +37,25 @@ export async function deleteSession(token: string) {
   });
 }
 
+export async function cleanupExpiredSessions() {
+  await prisma.session.deleteMany({
+    where: {
+      expiresAt: { lt: new Date() },
+    },
+  });
+}
+
 export async function getSessionFromCookies() {
   const cookieStore = await cookies();
   const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
   if (!token) return null;
+
+  await prisma.session.deleteMany({
+    where: {
+      token,
+      expiresAt: { lte: new Date() },
+    },
+  });
 
   const session = await prisma.session.findFirst({
     where: {

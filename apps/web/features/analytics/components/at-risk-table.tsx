@@ -24,6 +24,17 @@ interface AtRiskTableProps {
   yearId?: string;
 }
 
+function useDebouncedValue<T>(value: T, delayMs: number) {
+  const [debounced, setDebounced] = React.useState(value);
+
+  React.useEffect(() => {
+    const timeout = window.setTimeout(() => setDebounced(value), delayMs);
+    return () => window.clearTimeout(timeout);
+  }, [delayMs, value]);
+
+  return debounced;
+}
+
 export function AtRiskTable({
   data,
   page,
@@ -33,10 +44,10 @@ export function AtRiskTable({
   yearId,
 }: AtRiskTableProps) {
   const [nameFilterInput, setNameFilterInput] = React.useState("");
-  const deferredNameFilter = React.useDeferredValue(nameFilterInput);
+  const debouncedNameFilter = useDebouncedValue(nameFilterInput, 300);
   const columnFilters = React.useMemo(
-    () => (deferredNameFilter ? [{ id: "name", value: deferredNameFilter }] : []),
-    [deferredNameFilter]
+    () => (debouncedNameFilter ? [{ id: "name", value: debouncedNameFilter }] : []),
+    [debouncedNameFilter]
   );
   const columns = React.useMemo<ColumnDef<AtRiskStudent>[]>(
     () => [
@@ -104,7 +115,7 @@ export function AtRiskTable({
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 64,
+    estimateSize: () => 72,
     overscan: 8,
   });
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
