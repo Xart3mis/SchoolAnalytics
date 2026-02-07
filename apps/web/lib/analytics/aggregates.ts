@@ -1,7 +1,6 @@
 import { Prisma } from "@school-analytics/db/client";
 
 import { RISK_THRESHOLDS } from "@/lib/analytics/config";
-import { mypCriteriaTotalSql, mypFinalGradeSql } from "@/lib/analytics/sql";
 import { prisma } from "@/lib/prisma";
 
 export type SubjectStat = {
@@ -34,8 +33,6 @@ function riskLevel(score: number) {
 }
 
 export async function getStudentSubjectStats(studentId: string, termId: string) {
-  const totalExpression = mypCriteriaTotalSql();
-  const finalGradeExpression = mypFinalGradeSql(totalExpression);
   const rows = await prisma.$queryRaw<
     Array<{
       subjectId: string;
@@ -50,7 +47,12 @@ export async function getStudentSubjectStats(studentId: string, termId: string) 
   >(Prisma.sql`
     SELECT c."id" AS "subjectId",
            c."name" AS "subjectName",
-           ${finalGradeExpression}::float AS "averageScore",
+           (
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'A'::"MypCriterion" THEN gec."score" END), 0)
+             + COALESCE(MAX(CASE WHEN gec."criterion" = 'B'::"MypCriterion" THEN gec."score" END), 0)
+             + COALESCE(MAX(CASE WHEN gec."criterion" = 'C'::"MypCriterion" THEN gec."score" END), 0)
+             + COALESCE(MAX(CASE WHEN gec."criterion" = 'D'::"MypCriterion" THEN gec."score" END), 0)
+           )::float / 4.0 AS "averageScore",
            COUNT(DISTINCT ge."id")::int AS "assessmentCount",
            COALESCE(MAX(CASE WHEN gec."criterion" = 'A'::"MypCriterion" THEN gec."score" END), 0)::int AS "criterionA",
            COALESCE(MAX(CASE WHEN gec."criterion" = 'B'::"MypCriterion" THEN gec."score" END), 0)::int AS "criterionB",
@@ -70,13 +72,10 @@ export async function getStudentSubjectStats(studentId: string, termId: string) 
 }
 
 export async function getClassSubjectStats(classSectionId: string, termId: string) {
-  const totalExpression = mypCriteriaTotalSql();
-  const finalGradeExpression = mypFinalGradeSql(totalExpression);
   const rows = await prisma.$queryRaw<SubjectStat[]>(Prisma.sql`
     WITH student_course AS (
       SELECT ge."studentId",
              cs."courseId" AS "courseId",
-             ${finalGradeExpression}::int AS "finalGrade",
              COALESCE(MAX(CASE WHEN gec."criterion" = 'A'::"MypCriterion" THEN gec."score" END), 0)::int AS "criterionA",
              COALESCE(MAX(CASE WHEN gec."criterion" = 'B'::"MypCriterion" THEN gec."score" END), 0)::int AS "criterionB",
              COALESCE(MAX(CASE WHEN gec."criterion" = 'C'::"MypCriterion" THEN gec."score" END), 0)::int AS "criterionC",
@@ -99,7 +98,12 @@ export async function getClassSubjectStats(classSectionId: string, termId: strin
     )
     SELECT c."id" AS "subjectId",
            c."name" AS "subjectName",
-           AVG(student_course."finalGrade")::float AS "averageScore",
+           (
+             AVG(student_course."criterionA")
+             + AVG(student_course."criterionB")
+             + AVG(student_course."criterionC")
+             + AVG(student_course."criterionD")
+           )::float / 4.0 AS "averageScore",
            AVG(student_course."criterionA")::float AS "criterionA",
            AVG(student_course."criterionB")::float AS "criterionB",
            AVG(student_course."criterionC")::float AS "criterionC",
@@ -116,13 +120,10 @@ export async function getClassSubjectStats(classSectionId: string, termId: strin
 }
 
 export async function getGradeSubjectStats(gradeLevel: number, termId: string) {
-  const totalExpression = mypCriteriaTotalSql();
-  const finalGradeExpression = mypFinalGradeSql(totalExpression);
   const rows = await prisma.$queryRaw<SubjectStat[]>(Prisma.sql`
     WITH student_course AS (
       SELECT ge."studentId",
              cs."courseId" AS "courseId",
-             ${finalGradeExpression}::int AS "finalGrade",
              COALESCE(MAX(CASE WHEN gec."criterion" = 'A'::"MypCriterion" THEN gec."score" END), 0)::int AS "criterionA",
              COALESCE(MAX(CASE WHEN gec."criterion" = 'B'::"MypCriterion" THEN gec."score" END), 0)::int AS "criterionB",
              COALESCE(MAX(CASE WHEN gec."criterion" = 'C'::"MypCriterion" THEN gec."score" END), 0)::int AS "criterionC",
@@ -149,7 +150,12 @@ export async function getGradeSubjectStats(gradeLevel: number, termId: string) {
     )
     SELECT c."id" AS "subjectId",
            c."name" AS "subjectName",
-           AVG(student_course."finalGrade")::float AS "averageScore",
+           (
+             AVG(student_course."criterionA")
+             + AVG(student_course."criterionB")
+             + AVG(student_course."criterionC")
+             + AVG(student_course."criterionD")
+           )::float / 4.0 AS "averageScore",
            AVG(student_course."criterionA")::float AS "criterionA",
            AVG(student_course."criterionB")::float AS "criterionB",
            AVG(student_course."criterionC")::float AS "criterionC",
@@ -294,15 +300,16 @@ export async function getGradeCriteriaSummary(
 }
 
 export async function getStudentOverallStat(studentId: string, termId: string): Promise<OverallStat> {
-  const totalExpression = mypCriteriaTotalSql();
-  const finalGradeExpression = mypFinalGradeSql(totalExpression);
   const [{ averageScore } = { averageScore: 0 }] = await prisma.$queryRaw<
     { averageScore: number }[]
   >(Prisma.sql`
-    WITH final_grades AS (
+    WITH student_course AS (
       SELECT ge."studentId",
              cs."courseId" AS "courseId",
-             ${finalGradeExpression}::int AS "finalGrade"
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'A'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionA",
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'B'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionB",
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'C'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionC",
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'D'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionD"
       FROM "GradeEntry" ge
       JOIN "GradeEntryCriterion" gec ON gec."gradeEntryId" = ge."id"
       JOIN "Assignment" a ON a."id" = ge."assignmentId"
@@ -310,8 +317,8 @@ export async function getStudentOverallStat(studentId: string, termId: string): 
       WHERE ge."studentId" = ${studentId} AND cs."academicTermId" = ${termId}
       GROUP BY ge."studentId", cs."courseId"
     )
-    SELECT AVG("finalGrade")::float AS "averageScore"
-    FROM final_grades
+    SELECT AVG(("criterionA" + "criterionB" + "criterionC" + "criterionD") / 4.0)::float AS "averageScore"
+    FROM student_course
   `);
 
   const score = Number(averageScore ?? 0);
@@ -319,15 +326,16 @@ export async function getStudentOverallStat(studentId: string, termId: string): 
 }
 
 export async function getClassOverallStat(classSectionId: string, termId: string): Promise<OverallStat> {
-  const totalExpression = mypCriteriaTotalSql();
-  const finalGradeExpression = mypFinalGradeSql(totalExpression);
   const [{ averageScore } = { averageScore: 0 }] = await prisma.$queryRaw<
     { averageScore: number }[]
   >(Prisma.sql`
-    WITH final_grades AS (
+    WITH student_course AS (
       SELECT ge."studentId",
              cs."courseId" AS "courseId",
-             ${finalGradeExpression}::int AS "finalGrade"
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'A'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionA",
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'B'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionB",
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'C'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionC",
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'D'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionD"
       FROM "GradeEntry" ge
       JOIN "GradeEntryCriterion" gec ON gec."gradeEntryId" = ge."id"
       JOIN "Assignment" a ON a."id" = ge."assignmentId"
@@ -335,8 +343,8 @@ export async function getClassOverallStat(classSectionId: string, termId: string
       WHERE cs."id" = ${classSectionId} AND cs."academicTermId" = ${termId}
       GROUP BY ge."studentId", cs."courseId"
     )
-    SELECT AVG("finalGrade")::float AS "averageScore"
-    FROM final_grades
+    SELECT AVG(("criterionA" + "criterionB" + "criterionC" + "criterionD") / 4.0)::float AS "averageScore"
+    FROM student_course
   `);
 
   const score = Number(averageScore ?? 0);
@@ -344,15 +352,16 @@ export async function getClassOverallStat(classSectionId: string, termId: string
 }
 
 export async function getGradeOverallStat(gradeLevel: number, termId: string): Promise<OverallStat> {
-  const totalExpression = mypCriteriaTotalSql();
-  const finalGradeExpression = mypFinalGradeSql(totalExpression);
   const [{ averageScore } = { averageScore: 0 }] = await prisma.$queryRaw<
     { averageScore: number }[]
   >(Prisma.sql`
-    WITH final_grades AS (
+    WITH student_course AS (
       SELECT ge."studentId",
              cs."courseId" AS "courseId",
-             ${finalGradeExpression}::int AS "finalGrade"
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'A'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionA",
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'B'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionB",
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'C'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionC",
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'D'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionD"
       FROM "GradeEntry" ge
       JOIN "GradeEntryCriterion" gec ON gec."gradeEntryId" = ge."id"
       JOIN "Assignment" a ON a."id" = ge."assignmentId"
@@ -362,8 +371,8 @@ export async function getGradeOverallStat(gradeLevel: number, termId: string): P
       WHERE gl."name" = ${String(gradeLevel)} AND cs."academicTermId" = ${termId}
       GROUP BY ge."studentId", cs."courseId"
     )
-    SELECT AVG("finalGrade")::float AS "averageScore"
-    FROM final_grades
+    SELECT AVG(("criterionA" + "criterionB" + "criterionC" + "criterionD") / 4.0)::float AS "averageScore"
+    FROM student_course
   `);
 
   const score = Number(averageScore ?? 0);

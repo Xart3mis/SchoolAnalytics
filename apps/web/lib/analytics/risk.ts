@@ -1,7 +1,6 @@
 import { Prisma } from "@school-analytics/db/client";
 
 import { RISK_THRESHOLDS } from "@/lib/analytics/config";
-import { mypCriteriaTotalSql, mypFinalGradeSql } from "@/lib/analytics/sql";
 import { prisma } from "@/lib/prisma";
 
 export type RiskBreakdown = {
@@ -24,26 +23,27 @@ function riskLevel(score: number) {
 }
 
 export async function getClassRiskBreakdown(classSectionId: string, termId: string) {
-  const totalExpression = mypCriteriaTotalSql();
-  const finalGradeExpression = mypFinalGradeSql(totalExpression);
   const rows = await prisma.$queryRaw<
     Array<{ high: number; medium: number; low: number }>
   >(Prisma.sql`
     SELECT
-      SUM(CASE WHEN stats."avgGrade" <= ${RISK_THRESHOLDS.high} THEN 1 ELSE 0 END)::int AS high,
+      SUM(CASE WHEN stats."criterionAvg" <= ${RISK_THRESHOLDS.high} THEN 1 ELSE 0 END)::int AS high,
       SUM(
         CASE
-          WHEN stats."avgGrade" > ${RISK_THRESHOLDS.high}
-           AND stats."avgGrade" <= ${RISK_THRESHOLDS.medium} THEN 1
+          WHEN stats."criterionAvg" > ${RISK_THRESHOLDS.high}
+           AND stats."criterionAvg" <= ${RISK_THRESHOLDS.medium} THEN 1
           ELSE 0
         END
       )::int AS medium,
-      SUM(CASE WHEN stats."avgGrade" > ${RISK_THRESHOLDS.medium} THEN 1 ELSE 0 END)::int AS low
+      SUM(CASE WHEN stats."criterionAvg" > ${RISK_THRESHOLDS.medium} THEN 1 ELSE 0 END)::int AS low
     FROM (
-      WITH final_grades AS (
+      WITH student_course AS (
         SELECT ge."studentId",
                cs."courseId" AS "courseId",
-               ${finalGradeExpression}::int AS "finalGrade"
+               COALESCE(MAX(CASE WHEN gec."criterion" = 'A'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionA",
+               COALESCE(MAX(CASE WHEN gec."criterion" = 'B'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionB",
+               COALESCE(MAX(CASE WHEN gec."criterion" = 'C'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionC",
+               COALESCE(MAX(CASE WHEN gec."criterion" = 'D'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionD"
         FROM "GradeEntry" ge
         JOIN "GradeEntryCriterion" gec ON gec."gradeEntryId" = ge."id"
         JOIN "Assignment" a ON a."id" = ge."assignmentId"
@@ -51,8 +51,9 @@ export async function getClassRiskBreakdown(classSectionId: string, termId: stri
         WHERE cs."id" = ${classSectionId} AND cs."academicTermId" = ${termId}
         GROUP BY ge."studentId", cs."courseId"
       )
-      SELECT "studentId", AVG("finalGrade")::float AS "avgGrade"
-      FROM final_grades
+      SELECT "studentId",
+             AVG(("criterionA" + "criterionB" + "criterionC" + "criterionD") / 4.0)::float AS "criterionAvg"
+      FROM student_course
       GROUP BY "studentId"
     ) AS stats
   `);
@@ -66,26 +67,27 @@ export async function getClassRiskBreakdown(classSectionId: string, termId: stri
 }
 
 export async function getGradeRiskBreakdown(gradeLevel: number, termId: string) {
-  const totalExpression = mypCriteriaTotalSql();
-  const finalGradeExpression = mypFinalGradeSql(totalExpression);
   const rows = await prisma.$queryRaw<
     Array<{ high: number; medium: number; low: number }>
   >(Prisma.sql`
     SELECT
-      SUM(CASE WHEN stats."avgGrade" <= ${RISK_THRESHOLDS.high} THEN 1 ELSE 0 END)::int AS high,
+      SUM(CASE WHEN stats."criterionAvg" <= ${RISK_THRESHOLDS.high} THEN 1 ELSE 0 END)::int AS high,
       SUM(
         CASE
-          WHEN stats."avgGrade" > ${RISK_THRESHOLDS.high}
-           AND stats."avgGrade" <= ${RISK_THRESHOLDS.medium} THEN 1
+          WHEN stats."criterionAvg" > ${RISK_THRESHOLDS.high}
+           AND stats."criterionAvg" <= ${RISK_THRESHOLDS.medium} THEN 1
           ELSE 0
         END
       )::int AS medium,
-      SUM(CASE WHEN stats."avgGrade" > ${RISK_THRESHOLDS.medium} THEN 1 ELSE 0 END)::int AS low
+      SUM(CASE WHEN stats."criterionAvg" > ${RISK_THRESHOLDS.medium} THEN 1 ELSE 0 END)::int AS low
     FROM (
-      WITH final_grades AS (
+      WITH student_course AS (
         SELECT ge."studentId",
                cs."courseId" AS "courseId",
-               ${finalGradeExpression}::int AS "finalGrade"
+               COALESCE(MAX(CASE WHEN gec."criterion" = 'A'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionA",
+               COALESCE(MAX(CASE WHEN gec."criterion" = 'B'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionB",
+               COALESCE(MAX(CASE WHEN gec."criterion" = 'C'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionC",
+               COALESCE(MAX(CASE WHEN gec."criterion" = 'D'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionD"
         FROM "GradeEntry" ge
         JOIN "GradeEntryCriterion" gec ON gec."gradeEntryId" = ge."id"
         JOIN "Assignment" a ON a."id" = ge."assignmentId"
@@ -95,8 +97,9 @@ export async function getGradeRiskBreakdown(gradeLevel: number, termId: string) 
         WHERE gl."name" = ${String(gradeLevel)} AND cs."academicTermId" = ${termId}
         GROUP BY ge."studentId", cs."courseId"
       )
-      SELECT "studentId", AVG("finalGrade")::float AS "avgGrade"
-      FROM final_grades
+      SELECT "studentId",
+             AVG(("criterionA" + "criterionB" + "criterionC" + "criterionD") / 4.0)::float AS "criterionAvg"
+      FROM student_course
       GROUP BY "studentId"
     ) AS stats
   `);
@@ -110,15 +113,16 @@ export async function getGradeRiskBreakdown(gradeLevel: number, termId: string) 
 }
 
 export async function getClassAtRiskList(classSectionId: string, termId: string, limit = 20) {
-  const totalExpression = mypCriteriaTotalSql();
-  const finalGradeExpression = mypFinalGradeSql(totalExpression);
   const rows = await prisma.$queryRaw<
     Array<{ id: string; fullName: string; gradeLevel: number; avgScore: number }>
   >(Prisma.sql`
-    WITH final_grades AS (
+    WITH student_course AS (
       SELECT ge."studentId",
              cs."courseId" AS "courseId",
-             ${finalGradeExpression}::int AS "finalGrade"
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'A'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionA",
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'B'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionB",
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'C'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionC",
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'D'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionD"
       FROM "GradeEntry" ge
       JOIN "GradeEntryCriterion" gec ON gec."gradeEntryId" = ge."id"
       JOIN "Assignment" a ON a."id" = ge."assignmentId"
@@ -127,16 +131,17 @@ export async function getClassAtRiskList(classSectionId: string, termId: string,
       GROUP BY ge."studentId", cs."courseId"
     ),
     student_stats AS (
-      SELECT "studentId", AVG("finalGrade")::float AS "avgGrade"
-      FROM final_grades
+      SELECT "studentId",
+             AVG(("criterionA" + "criterionB" + "criterionC" + "criterionD") / 4.0)::float AS "avgGrade"
+      FROM student_course
       GROUP BY "studentId"
     ),
     grade_levels AS (
-      SELECT final_grades."studentId", MIN(gl."name")::int AS "gradeLevel"
-      FROM final_grades
-      JOIN "Course" c ON c."id" = final_grades."courseId"
+      SELECT student_course."studentId", MIN(gl."name")::int AS "gradeLevel"
+      FROM student_course
+      JOIN "Course" c ON c."id" = student_course."courseId"
       JOIN "GradeLevel" gl ON gl."id" = c."gradeLevelId"
-      GROUP BY final_grades."studentId"
+      GROUP BY student_course."studentId"
     )
     SELECT s."id",
            COALESCE(u."displayName", CONCAT_WS(' ', s."firstName", s."lastName"), u."email") AS "fullName",
@@ -160,15 +165,16 @@ export async function getClassAtRiskList(classSectionId: string, termId: string,
 }
 
 export async function getGradeAtRiskList(gradeLevel: number, termId: string, limit = 20) {
-  const totalExpression = mypCriteriaTotalSql();
-  const finalGradeExpression = mypFinalGradeSql(totalExpression);
   const rows = await prisma.$queryRaw<
     Array<{ id: string; fullName: string; gradeLevel: number; avgScore: number }>
   >(Prisma.sql`
-    WITH final_grades AS (
+    WITH student_course AS (
       SELECT ge."studentId",
              cs."courseId" AS "courseId",
-             ${finalGradeExpression}::int AS "finalGrade"
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'A'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionA",
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'B'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionB",
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'C'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionC",
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'D'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionD"
       FROM "GradeEntry" ge
       JOIN "GradeEntryCriterion" gec ON gec."gradeEntryId" = ge."id"
       JOIN "Assignment" a ON a."id" = ge."assignmentId"
@@ -179,8 +185,9 @@ export async function getGradeAtRiskList(gradeLevel: number, termId: string, lim
       GROUP BY ge."studentId", cs."courseId"
     ),
     student_stats AS (
-      SELECT "studentId", AVG("finalGrade")::float AS "avgGrade"
-      FROM final_grades
+      SELECT "studentId",
+             AVG(("criterionA" + "criterionB" + "criterionC" + "criterionD") / 4.0)::float AS "avgGrade"
+      FROM student_course
       GROUP BY "studentId"
     )
     SELECT s."id",

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AdminNotes } from "@/features/notes/components/admin-notes";
 import { StatTiles } from "@/features/analytics/components/stat-tiles";
-import { getActiveTerm, getActiveTermForYear } from "@/lib/analytics/terms";
+import { resolveSelectedTerm } from "@/lib/analytics/terms";
 import { requireSession } from "@/lib/auth/guards";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@school-analytics/db/client";
@@ -16,31 +16,50 @@ export default async function GradesPage({ searchParams }: GradesPageProps) {
   await requireSession();
   const resolved = await searchParams;
   const query = resolved?.q ?? "";
-  const termId = resolved?.term;
   const yearId = resolved?.year;
-
-  let term = termId ? await getActiveTerm(termId) : null;
-  if (!term && yearId) {
-    term = await getActiveTermForYear(yearId);
-  }
-  if (!term) {
-    term = await getActiveTerm();
-  }
+  const term = await resolveSelectedTerm({
+    yearId,
+    termId: resolved?.term,
+  });
   if (!term) {
     return <div className="text-sm text-[color:var(--text-muted)]">No term data yet.</div>;
   }
 
   const grades = await prisma.$queryRaw<
-    Array<{ gradeLevel: number; count: number }>
+    Array<{
+      gradeLevel: number;
+      count: number;
+      criterionA: number;
+      criterionB: number;
+      criterionC: number;
+      criterionD: number;
+      averageScore: number;
+    }>
   >(Prisma.sql`
+    WITH student_course AS (
+      SELECT ge."studentId",
+             cs."courseId" AS "courseId",
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'A'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionA",
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'B'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionB",
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'C'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionC",
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'D'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionD"
+      FROM "GradeEntry" ge
+      JOIN "GradeEntryCriterion" gec ON gec."gradeEntryId" = ge."id"
+      JOIN "Assignment" a ON a."id" = ge."assignmentId"
+      JOIN "ClassSection" cs ON cs."id" = a."classSectionId"
+      WHERE cs."academicTermId" = ${term.id}
+      GROUP BY ge."studentId", cs."courseId"
+    )
     SELECT gl."name"::int AS "gradeLevel",
-           COUNT(DISTINCT ge."studentId")::int AS count
-    FROM "GradeEntry" ge
-    JOIN "Assignment" a ON a."id" = ge."assignmentId"
-    JOIN "ClassSection" cs ON cs."id" = a."classSectionId"
-    JOIN "Course" c ON c."id" = cs."courseId"
+           COUNT(DISTINCT student_course."studentId")::int AS count,
+           AVG(student_course."criterionA")::float AS "criterionA",
+           AVG(student_course."criterionB")::float AS "criterionB",
+           AVG(student_course."criterionC")::float AS "criterionC",
+           AVG(student_course."criterionD")::float AS "criterionD",
+           AVG((student_course."criterionA" + student_course."criterionB" + student_course."criterionC" + student_course."criterionD") / 4.0)::float AS "averageScore"
+    FROM student_course
+    JOIN "Course" c ON c."id" = student_course."courseId"
     JOIN "GradeLevel" gl ON gl."id" = c."gradeLevelId"
-    WHERE cs."academicTermId" = ${term.id}
     GROUP BY gl."name"
     ORDER BY gl."name"::int ASC
   `);
@@ -54,8 +73,8 @@ export default async function GradesPage({ searchParams }: GradesPageProps) {
       <StatTiles
         items={[
           { id: "grades", label: "Grade Levels", value: grades.length.toString() },
-          { id: "term", label: "Active Term", value: `${term.name}` },
           { id: "year", label: "Academic Year", value: term.academicYear.name },
+          { id: "term", label: "Snapshot Term", value: `${term.name}` },
           {
             id: "students",
             label: "Students",
@@ -70,7 +89,6 @@ export default async function GradesPage({ searchParams }: GradesPageProps) {
             Grades
           </CardTitle>
           <form className="flex w-full items-center gap-2 sm:w-auto">
-            {termId ? <input type="hidden" name="term" value={termId} /> : null}
             {yearId ? <input type="hidden" name="year" value={yearId} /> : null}
             <input
               name="q"
@@ -82,24 +100,26 @@ export default async function GradesPage({ searchParams }: GradesPageProps) {
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            <div className="min-w-[520px]">
-              <div className="grid grid-cols-3 gap-4 border-b border-[color:var(--border)] pb-2 text-xs font-semibold uppercase text-[color:var(--text-muted)]">
+            <div className="min-w-[700px]">
+              <div className="grid grid-cols-4 gap-4 border-b border-[color:var(--border)] pb-2 text-xs font-semibold uppercase text-[color:var(--text-muted)]">
                 <div>Grade</div>
                 <div>Students</div>
+                <div>Criterion Avg</div>
                 <div>Action</div>
               </div>
               <div className="divide-y divide-[color:var(--border)]">
                 {filteredGrades.map((grade) => (
                   <div
                     key={grade.gradeLevel}
-                    className="grid grid-cols-3 gap-4 py-3 text-[13px] text-[color:var(--text)] sm:text-sm"
+                    className="grid grid-cols-4 gap-4 py-3 text-[13px] text-[color:var(--text)] sm:text-sm"
                   >
                     <div className="font-medium text-[color:var(--text)]">
                       Grade {grade.gradeLevel}
                     </div>
                     <div>{grade.count.toLocaleString()}</div>
+                    <div>{Number(grade.averageScore).toFixed(2)}</div>
                     <Link
-                      href={`/grades/${grade.gradeLevel}?term=${term.id}`}
+                      href={`/grades/${grade.gradeLevel}?year=${term.academicYearId}`}
                       className="text-[13px] font-medium text-[color:var(--text)] hover:text-[color:var(--accent-3)] sm:text-sm"
                     >
                       View Details

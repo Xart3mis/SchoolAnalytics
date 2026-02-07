@@ -1,9 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AtRiskTable } from "@/features/analytics/components/at-risk-table";
 import { DashboardCharts } from "@/features/analytics/components/dashboard-charts";
+import { EntityComparisonPanels } from "@/features/analytics/components/entity-comparison-panels";
 import { AdminNotes } from "@/features/notes/components/admin-notes";
 import { getDashboardData } from "@/lib/analytics/dashboard";
-import { getActiveTerm, getActiveTermForYear } from "@/lib/analytics/terms";
+import { resolveSelectedTerm } from "@/lib/analytics/terms";
 import { requireSession } from "@/lib/auth/guards";
 
 interface DashboardPageProps {
@@ -17,22 +18,21 @@ interface DashboardPageProps {
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   await requireSession();
   const resolvedSearchParams = await searchParams;
-  const termId = resolvedSearchParams?.term;
   const yearId = resolvedSearchParams?.year;
-  let term = termId ? await getActiveTerm(termId) : null;
-  if (!term && yearId) {
-    term = await getActiveTermForYear(yearId);
-  }
+  const term = await resolveSelectedTerm({
+    yearId,
+    termId: resolvedSearchParams?.term,
+  });
   const data = await getDashboardData(term?.id);
   const page = Number(resolvedSearchParams?.page ?? "1");
   const pageSize = 20;
   const start = (page - 1) * pageSize;
   const atRiskPage = data.atRisk.slice(start, start + pageSize);
   const queryParams = new URLSearchParams();
-  if (term?.id) {
-    queryParams.set("term", term.id);
-  } else if (yearId) {
+  if (yearId) {
     queryParams.set("year", yearId);
+  } else if (term?.academicYearId) {
+    queryParams.set("year", term.academicYearId);
   }
 
   return (
@@ -60,6 +60,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         gradeDistribution={data.gradeDistribution}
       />
 
+      <EntityComparisonPanels
+        sections={[
+          { id: "grades", title: "Grade vs Grade", rows: data.comparisons.grades },
+          { id: "classes", title: "Class vs Class", rows: data.comparisons.classes },
+          { id: "students", title: "Student vs Student", rows: data.comparisons.students },
+        ]}
+      />
+
       <section>
         <AtRiskTable
           data={atRiskPage}
@@ -67,7 +75,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           pageSize={pageSize}
           totalCount={data.atRisk.length}
           queryString={queryParams.toString()}
-          termId={term?.id}
+          yearId={yearId ?? term?.academicYearId}
         />
       </section>
 

@@ -10,5 +10,5 @@ export const FINAL_GRADE_SCALE = {
 
 export const RISK_THRESHOLDS = {
   high: 3,
-  medium: 4,
+  medium: 5,
 };

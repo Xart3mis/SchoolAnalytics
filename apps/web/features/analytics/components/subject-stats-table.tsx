@@ -37,7 +37,7 @@ export function SubjectStatsTable({ title, data }: SubjectStatsTableProps) {
             <div>Crit B</div>
             <div>Crit C</div>
             <div>Crit D</div>
-            <div>Avg Final Grade</div>
+            <div>Criterion Avg</div>
             <div>Assessments</div>
           </div>
           <div className="divide-y divide-[color:var(--border)]">

@@ -59,9 +59,6 @@ export function AppSidebar() {
           );
         })}
       </nav>
-      <div className="mt-4 rounded-lg border border-[color:var(--border)] bg-[color:var(--surface-strong)] p-3 text-[11px] text-[color:var(--text-muted)]">
-        {sidebarOpen ? "Updated 5m ago" : "5m"}
-      </div>
     </aside>
   );
 }

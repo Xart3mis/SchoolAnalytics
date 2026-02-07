@@ -13,7 +13,7 @@ import {
   getStudentSubjectStats,
 } from "@/lib/analytics/aggregates";
 import { getStudentAssignmentTrend, getStudentSubjectTrends } from "@/lib/analytics/trends";
-import { getActiveTerm, getActiveTermForYear } from "@/lib/analytics/terms";
+import { resolveSelectedTerm } from "@/lib/analytics/terms";
 import { requireSession } from "@/lib/auth/guards";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@school-analytics/db/client";
@@ -27,7 +27,6 @@ export default async function StudentDetailPage({ params, searchParams }: Studen
   await requireSession();
   const { id } = await params;
   const resolvedSearchParams = await searchParams;
-  const termId = resolvedSearchParams?.term;
   const yearId = resolvedSearchParams?.year;
   const student = await prisma.student.findUnique({
     where: { id },
@@ -37,13 +36,10 @@ export default async function StudentDetailPage({ params, searchParams }: Studen
     notFound();
   }
 
-  let term = termId ? await getActiveTerm(termId) : null;
-  if (!term && yearId) {
-    term = await getActiveTermForYear(yearId);
-  }
-  if (!term) {
-    term = await getActiveTerm();
-  }
+  const term = await resolveSelectedTerm({
+    yearId,
+    termId: resolvedSearchParams?.term,
+  });
   if (!term) {
     return <div className="text-sm text-[color:var(--text-muted)]">No term data yet.</div>;
   }
@@ -103,7 +99,7 @@ export default async function StudentDetailPage({ params, searchParams }: Studen
         <Card className="transition-transform duration-300 ease-out hover:-translate-y-0.5">
           <CardHeader>
             <CardTitle className="text-xs uppercase tracking-[0.18em] text-[color:var(--accent)]">
-              Avg Final Grade
+              Criterion Average
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -160,11 +156,11 @@ export default async function StudentDetailPage({ params, searchParams }: Studen
       <section className="stagger grid gap-3 sm:gap-4 xl:grid-cols-[2fr_1fr]">
         <ChartCard
           title="Assignment Trend"
-          subtitle="Assignment-level final grades with term markers"
+          subtitle="Assignment-level criterion scores with term markers"
         >
           <TermTrendLine data={trend} />
         </ChartCard>
-        <ChartCard title="Subject Trends" subtitle="Trimester comparison">
+        <ChartCard title="Criterion Trends" subtitle="Academic-year criterion progression">
           <SubjectTrendLines data={subjectTrends} />
         </ChartCard>
       </section>

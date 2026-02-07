@@ -1,28 +1,27 @@
 import { Prisma } from "@school-analytics/db/client";
 
-import { mypCriteriaTotalSql, mypFinalGradeSql } from "@/lib/analytics/sql";
 import { prisma } from "@/lib/prisma";
 
-export type TermTrendPoint = {
+export type CriterionTrendPoint = {
   termId: string;
   label: string;
-  value: number;
+  criterionA: number;
+  criterionB: number;
+  criterionC: number;
+  criterionD: number;
 };
 
 export type AssignmentTrendPoint = {
   id: string;
   label: string;
   fullLabel: string;
-  value: number | null;
+  criterionA: number | null;
+  criterionB: number | null;
+  criterionC: number | null;
+  criterionD: number | null;
   kind: "assignment" | "term" | "start";
   subjectId?: string;
   subjectName?: string;
-};
-
-export type SubjectTrendSeries = {
-  subjectId: string;
-  subjectName: string;
-  points: TermTrendPoint[];
 };
 
 async function getTerms(academicYearId: string) {
@@ -44,7 +43,10 @@ type AssignmentRow = {
   termId: string;
   termName: string;
   termStartDate: Date;
-  avgGrade: number;
+  criterionA: number;
+  criterionB: number;
+  criterionC: number;
+  criterionD: number;
   subjectId: string;
   subjectName: string;
 };
@@ -66,7 +68,10 @@ function buildAssignmentTrend(
     id: `start-${terms[0].id}`,
     label: "0",
     fullLabel: "Start",
-    value: null,
+    criterionA: null,
+    criterionB: null,
+    criterionC: null,
+    criterionD: null,
     kind: "start",
   });
 
@@ -88,7 +93,10 @@ function buildAssignmentTrend(
         id: `assignment-${assignment.assignmentId}`,
         label: shortLabel,
         fullLabel,
-        value: Number(assignment.avgGrade),
+        criterionA: Number(assignment.criterionA),
+        criterionB: Number(assignment.criterionB),
+        criterionC: Number(assignment.criterionC),
+        criterionD: Number(assignment.criterionD),
         kind: "assignment",
         subjectId: assignment.subjectId,
         subjectName: assignment.subjectName,
@@ -100,7 +108,10 @@ function buildAssignmentTrend(
       id: `term-${term.id}`,
       label: formatTermLabel(term.name),
       fullLabel: formatTermLabel(term.name),
-      value: null,
+      criterionA: null,
+      criterionB: null,
+      criterionC: null,
+      criterionD: null,
       kind: "term",
     });
   }
@@ -111,8 +122,6 @@ function buildAssignmentTrend(
 export async function getStudentAssignmentTrend(studentId: string, academicYearId: string) {
   const terms = await getTerms(academicYearId);
   if (terms.length === 0) return [];
-  const totalExpression = mypCriteriaTotalSql();
-  const finalGradeExpression = mypFinalGradeSql(totalExpression);
   const rows = await prisma.$queryRaw<AssignmentRow[]>(Prisma.sql`
     SELECT a."id" AS "assignmentId",
            a."title" AS "assignmentTitle",
@@ -123,7 +132,10 @@ export async function getStudentAssignmentTrend(studentId: string, academicYearI
            t."startDate" AS "termStartDate",
            c."id" AS "subjectId",
            c."name" AS "subjectName",
-           ${finalGradeExpression}::int AS "avgGrade"
+           AVG(CASE WHEN gec."criterion" = 'A'::"MypCriterion" THEN gec."score" END)::float AS "criterionA",
+           AVG(CASE WHEN gec."criterion" = 'B'::"MypCriterion" THEN gec."score" END)::float AS "criterionB",
+           AVG(CASE WHEN gec."criterion" = 'C'::"MypCriterion" THEN gec."score" END)::float AS "criterionC",
+           AVG(CASE WHEN gec."criterion" = 'D'::"MypCriterion" THEN gec."score" END)::float AS "criterionD"
     FROM "GradeEntry" ge
     JOIN "GradeEntryCriterion" gec ON gec."gradeEntryId" = ge."id"
     JOIN "Assignment" a ON a."id" = ge."assignmentId"
@@ -142,10 +154,8 @@ export async function getStudentAssignmentTrend(studentId: string, academicYearI
 export async function getClassAssignmentTrend(classSectionId: string, academicYearId: string) {
   const terms = await getTerms(academicYearId);
   if (terms.length === 0) return [];
-  const totalExpression = mypCriteriaTotalSql();
-  const finalGradeExpression = mypFinalGradeSql(totalExpression);
   const rows = await prisma.$queryRaw<AssignmentRow[]>(Prisma.sql`
-    WITH assignment_grades AS (
+    WITH assignment_scores AS (
       SELECT ge."studentId",
              a."id" AS "assignmentId",
              a."title" AS "assignmentTitle",
@@ -155,7 +165,10 @@ export async function getClassAssignmentTrend(classSectionId: string, academicYe
              t."name" AS "termName",
              t."startDate" AS "termStartDate",
              cs."courseId" AS "subjectId",
-             ${finalGradeExpression}::int AS "finalGrade"
+             MAX(CASE WHEN gec."criterion" = 'A'::"MypCriterion" THEN gec."score" END)::float AS "criterionA",
+             MAX(CASE WHEN gec."criterion" = 'B'::"MypCriterion" THEN gec."score" END)::float AS "criterionB",
+             MAX(CASE WHEN gec."criterion" = 'C'::"MypCriterion" THEN gec."score" END)::float AS "criterionC",
+             MAX(CASE WHEN gec."criterion" = 'D'::"MypCriterion" THEN gec."score" END)::float AS "criterionD"
       FROM "GradeEntry" ge
       JOIN "GradeEntryCriterion" gec ON gec."gradeEntryId" = ge."id"
       JOIN "Assignment" a ON a."id" = ge."assignmentId"
@@ -165,28 +178,31 @@ export async function getClassAssignmentTrend(classSectionId: string, academicYe
         AND t."academicYearId" = ${academicYearId}
       GROUP BY ge."studentId", a."id", a."title", a."dueDate", a."createdAt", t."id", t."name", t."startDate", cs."courseId"
     )
-    SELECT ag."assignmentId",
-           ag."assignmentTitle",
-           ag."dueDate",
-           ag."createdAt",
-           ag."termId",
-           ag."termName",
-           ag."termStartDate",
-           ag."subjectId",
+    SELECT scores."assignmentId",
+           scores."assignmentTitle",
+           scores."dueDate",
+           scores."createdAt",
+           scores."termId",
+           scores."termName",
+           scores."termStartDate",
+           scores."subjectId",
            c."name" AS "subjectName",
-           AVG(ag."finalGrade")::float AS "avgGrade"
-    FROM assignment_grades ag
-    JOIN "Course" c ON c."id" = ag."subjectId"
-    GROUP BY ag."assignmentId",
-             ag."assignmentTitle",
-             ag."dueDate",
-             ag."createdAt",
-             ag."termId",
-             ag."termName",
-             ag."termStartDate",
-             ag."subjectId",
+           AVG(scores."criterionA")::float AS "criterionA",
+           AVG(scores."criterionB")::float AS "criterionB",
+           AVG(scores."criterionC")::float AS "criterionC",
+           AVG(scores."criterionD")::float AS "criterionD"
+    FROM assignment_scores scores
+    JOIN "Course" c ON c."id" = scores."subjectId"
+    GROUP BY scores."assignmentId",
+             scores."assignmentTitle",
+             scores."dueDate",
+             scores."createdAt",
+             scores."termId",
+             scores."termName",
+             scores."termStartDate",
+             scores."subjectId",
              c."name"
-    ORDER BY ag."termStartDate" ASC, ag."dueDate" ASC NULLS LAST, ag."createdAt" ASC
+    ORDER BY scores."termStartDate" ASC, scores."dueDate" ASC NULLS LAST, scores."createdAt" ASC
   `);
 
   return buildAssignmentTrend(rows, terms);
@@ -195,10 +211,8 @@ export async function getClassAssignmentTrend(classSectionId: string, academicYe
 export async function getGradeAssignmentTrend(gradeLevel: number, academicYearId: string) {
   const terms = await getTerms(academicYearId);
   if (terms.length === 0) return [];
-  const totalExpression = mypCriteriaTotalSql();
-  const finalGradeExpression = mypFinalGradeSql(totalExpression);
   const rows = await prisma.$queryRaw<AssignmentRow[]>(Prisma.sql`
-    WITH assignment_grades AS (
+    WITH assignment_scores AS (
       SELECT ge."studentId",
              a."id" AS "assignmentId",
              a."title" AS "assignmentTitle",
@@ -209,7 +223,10 @@ export async function getGradeAssignmentTrend(gradeLevel: number, academicYearId
              t."startDate" AS "termStartDate",
              c."id" AS "subjectId",
              c."name" AS "subjectName",
-             ${finalGradeExpression}::int AS "finalGrade"
+             MAX(CASE WHEN gec."criterion" = 'A'::"MypCriterion" THEN gec."score" END)::float AS "criterionA",
+             MAX(CASE WHEN gec."criterion" = 'B'::"MypCriterion" THEN gec."score" END)::float AS "criterionB",
+             MAX(CASE WHEN gec."criterion" = 'C'::"MypCriterion" THEN gec."score" END)::float AS "criterionC",
+             MAX(CASE WHEN gec."criterion" = 'D'::"MypCriterion" THEN gec."score" END)::float AS "criterionD"
       FROM "GradeEntry" ge
       JOIN "GradeEntryCriterion" gec ON gec."gradeEntryId" = ge."id"
       JOIN "Assignment" a ON a."id" = ge."assignmentId"
@@ -230,8 +247,11 @@ export async function getGradeAssignmentTrend(gradeLevel: number, academicYearId
            "termStartDate",
            "subjectId",
            "subjectName",
-           AVG("finalGrade")::float AS "avgGrade"
-    FROM assignment_grades
+           AVG("criterionA")::float AS "criterionA",
+           AVG("criterionB")::float AS "criterionB",
+           AVG("criterionC")::float AS "criterionC",
+           AVG("criterionD")::float AS "criterionD"
+    FROM assignment_scores
     GROUP BY "assignmentId", "assignmentTitle", "dueDate", "createdAt", "termId", "termName", "termStartDate", "subjectId", "subjectName"
     ORDER BY "termStartDate" ASC, "dueDate" ASC NULLS LAST, "createdAt" ASC
   `);
@@ -242,16 +262,23 @@ export async function getGradeAssignmentTrend(gradeLevel: number, academicYearId
 export async function getStudentSubjectTrends(studentId: string, academicYearId: string) {
   const terms = await getTerms(academicYearId);
   if (terms.length === 0) return [];
-  const totalExpression = mypCriteriaTotalSql();
-  const finalGradeExpression = mypFinalGradeSql(totalExpression);
   const rows = await prisma.$queryRaw<
-    Array<{ termId: string; subjectId: string; subjectName: string; avgGrade: number }>
+    Array<{
+      termId: string;
+      criterionA: number;
+      criterionB: number;
+      criterionC: number;
+      criterionD: number;
+    }>
   >(Prisma.sql`
-    WITH final_grades AS (
+    WITH student_course AS (
       SELECT ge."studentId",
              cs."academicTermId" AS "termId",
              cs."courseId" AS "courseId",
-             ${finalGradeExpression}::int AS "finalGrade"
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'A'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionA",
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'B'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionB",
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'C'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionC",
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'D'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionD"
       FROM "GradeEntry" ge
       JOIN "GradeEntryCriterion" gec ON gec."gradeEntryId" = ge."id"
       JOIN "Assignment" a ON a."id" = ge."assignmentId"
@@ -260,32 +287,38 @@ export async function getStudentSubjectTrends(studentId: string, academicYearId:
         AND cs."academicTermId" IN (${Prisma.join(terms.map((t) => t.id))})
       GROUP BY ge."studentId", cs."academicTermId", cs."courseId"
     )
-    SELECT final_grades."termId" AS "termId",
-           c."id" AS "subjectId",
-           c."name" AS "subjectName",
-           AVG(final_grades."finalGrade")::float AS "avgGrade"
-    FROM final_grades
-    JOIN "Course" c ON c."id" = final_grades."courseId"
-    GROUP BY final_grades."termId", c."id"
-    ORDER BY c."name" ASC
+    SELECT "termId",
+           AVG("criterionA")::float AS "criterionA",
+           AVG("criterionB")::float AS "criterionB",
+           AVG("criterionC")::float AS "criterionC",
+           AVG("criterionD")::float AS "criterionD"
+    FROM student_course
+    GROUP BY "termId"
   `);
 
-  return buildSubjectSeries(rows, terms);
+  return buildCriteriaSeries(rows, terms);
 }
 
 export async function getClassSubjectTrends(courseId: string, academicYearId: string) {
   const terms = await getTerms(academicYearId);
   if (terms.length === 0) return [];
-  const totalExpression = mypCriteriaTotalSql();
-  const finalGradeExpression = mypFinalGradeSql(totalExpression);
   const rows = await prisma.$queryRaw<
-    Array<{ termId: string; subjectId: string; subjectName: string; avgGrade: number }>
+    Array<{
+      termId: string;
+      criterionA: number;
+      criterionB: number;
+      criterionC: number;
+      criterionD: number;
+    }>
   >(Prisma.sql`
-    WITH final_grades AS (
+    WITH student_course AS (
       SELECT ge."studentId",
              cs."academicTermId" AS "termId",
              cs."courseId" AS "courseId",
-             ${finalGradeExpression}::int AS "finalGrade"
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'A'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionA",
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'B'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionB",
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'C'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionC",
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'D'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionD"
       FROM "GradeEntry" ge
       JOIN "GradeEntryCriterion" gec ON gec."gradeEntryId" = ge."id"
       JOIN "Assignment" a ON a."id" = ge."assignmentId"
@@ -294,32 +327,38 @@ export async function getClassSubjectTrends(courseId: string, academicYearId: st
         AND cs."academicTermId" IN (${Prisma.join(terms.map((t) => t.id))})
       GROUP BY ge."studentId", cs."academicTermId", cs."courseId"
     )
-    SELECT final_grades."termId" AS "termId",
-           c."id" AS "subjectId",
-           c."name" AS "subjectName",
-           AVG(final_grades."finalGrade")::float AS "avgGrade"
-    FROM final_grades
-    JOIN "Course" c ON c."id" = final_grades."courseId"
-    GROUP BY final_grades."termId", c."id"
-    ORDER BY c."name" ASC
+    SELECT "termId",
+           AVG("criterionA")::float AS "criterionA",
+           AVG("criterionB")::float AS "criterionB",
+           AVG("criterionC")::float AS "criterionC",
+           AVG("criterionD")::float AS "criterionD"
+    FROM student_course
+    GROUP BY "termId"
   `);
 
-  return buildSubjectSeries(rows, terms);
+  return buildCriteriaSeries(rows, terms);
 }
 
 export async function getGradeSubjectTrends(gradeLevel: number, academicYearId: string) {
   const terms = await getTerms(academicYearId);
   if (terms.length === 0) return [];
-  const totalExpression = mypCriteriaTotalSql();
-  const finalGradeExpression = mypFinalGradeSql(totalExpression);
   const rows = await prisma.$queryRaw<
-    Array<{ termId: string; subjectId: string; subjectName: string; avgGrade: number }>
+    Array<{
+      termId: string;
+      criterionA: number;
+      criterionB: number;
+      criterionC: number;
+      criterionD: number;
+    }>
   >(Prisma.sql`
-    WITH final_grades AS (
+    WITH student_course AS (
       SELECT ge."studentId",
              cs."academicTermId" AS "termId",
              cs."courseId" AS "courseId",
-             ${finalGradeExpression}::int AS "finalGrade"
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'A'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionA",
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'B'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionB",
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'C'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionC",
+             COALESCE(MAX(CASE WHEN gec."criterion" = 'D'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionD"
       FROM "GradeEntry" ge
       JOIN "GradeEntryCriterion" gec ON gec."gradeEntryId" = ge."id"
       JOIN "Assignment" a ON a."id" = ge."assignmentId"
@@ -330,56 +369,43 @@ export async function getGradeSubjectTrends(gradeLevel: number, academicYearId: 
         AND cs."academicTermId" IN (${Prisma.join(terms.map((t) => t.id))})
       GROUP BY ge."studentId", cs."academicTermId", cs."courseId"
     )
-    SELECT final_grades."termId" AS "termId",
-           c."id" AS "subjectId",
-           c."name" AS "subjectName",
-           AVG(final_grades."finalGrade")::float AS "avgGrade"
-    FROM final_grades
-    JOIN "Course" c ON c."id" = final_grades."courseId"
-    GROUP BY final_grades."termId", c."id"
-    ORDER BY c."name" ASC
+    SELECT "termId",
+           AVG("criterionA")::float AS "criterionA",
+           AVG("criterionB")::float AS "criterionB",
+           AVG("criterionC")::float AS "criterionC",
+           AVG("criterionD")::float AS "criterionD"
+    FROM student_course
+    GROUP BY "termId"
   `);
 
-  return buildSubjectSeries(rows, terms);
+  return buildCriteriaSeries(rows, terms);
 }
 
-function buildSubjectSeries(
-  rows: Array<{ termId: string; subjectId: string; subjectName: string; avgGrade: number }>,
+function buildCriteriaSeries(
+  rows: Array<{ termId: string; criterionA: number; criterionB: number; criterionC: number; criterionD: number }>,
   terms: Array<{ id: string; name: string }>
-): SubjectTrendSeries[] {
-  const termIndex = new Map(terms.map((term) => [term.id, term]));
-  const grouped = new Map<string, SubjectTrendSeries>();
+): CriterionTrendPoint[] {
+  const byTerm = new Map(
+    rows.map((row) => [
+      row.termId,
+      {
+        criterionA: Number(row.criterionA),
+        criterionB: Number(row.criterionB),
+        criterionC: Number(row.criterionC),
+        criterionD: Number(row.criterionD),
+      },
+    ])
+  );
 
-  for (const row of rows) {
-    const existing = grouped.get(row.subjectId);
-    const point = {
-      termId: row.termId,
-      label: formatTermLabel(termIndex.get(row.termId)?.name ?? row.termId),
-      value: Number(row.avgGrade),
+  return terms.map((term) => {
+    const found = byTerm.get(term.id);
+    return {
+      termId: term.id,
+      label: formatTermLabel(term.name),
+      criterionA: found?.criterionA ?? 0,
+      criterionB: found?.criterionB ?? 0,
+      criterionC: found?.criterionC ?? 0,
+      criterionD: found?.criterionD ?? 0,
     };
-
-    if (existing) {
-      existing.points.push(point);
-    } else {
-      grouped.set(row.subjectId, {
-        subjectId: row.subjectId,
-        subjectName: row.subjectName,
-        points: [point],
-      });
-    }
-  }
-
-  return Array.from(grouped.values()).map((series) => ({
-    ...series,
-    points: terms.map((term) => {
-      const found = series.points.find((point) => point.termId === term.id);
-      return (
-        found ?? {
-          termId: term.id,
-          label: formatTermLabel(term.name),
-          value: 0,
-        }
-      );
-    }),
-  }));
+  });
 }

@@ -5,7 +5,7 @@ import { SubjectStatsTable } from "@/features/analytics/components/subject-stats
 import { AdminNotes } from "@/features/notes/components/admin-notes";
 import { ChartCard } from "@/features/analytics/components/chart-card";
 import { AtRiskMiniTable } from "@/features/analytics/components/at-risk-mini-table";
-import { RiskBreakdownPie } from "@/features/analytics/components/risk-breakdown-pie";
+import { CriteriaComparisonBars } from "@/features/analytics/components/criteria-comparison-bars";
 import { SubjectTrendLines } from "@/features/analytics/components/subject-trend-lines";
 import { TermTrendLine } from "@/features/analytics/components/term-trend-line";
 import { StatTiles } from "@/features/analytics/components/stat-tiles";
@@ -14,7 +14,7 @@ import {
   getClassCriteriaSummary,
   getClassSubjectStats,
 } from "@/lib/analytics/aggregates";
-import { getClassRiskBreakdown, getClassAtRiskList } from "@/lib/analytics/risk";
+import { getClassAtRiskList } from "@/lib/analytics/risk";
 import { getClassAssignmentTrend, getClassSubjectTrends } from "@/lib/analytics/trends";
 import { getActiveTerm } from "@/lib/analytics/terms";
 import { requireSession } from "@/lib/auth/guards";
@@ -43,7 +43,7 @@ export default async function ClassDetailPage({ params }: ClassDetailPageProps) 
     return <div className="text-sm text-[color:var(--text-muted)]">No term data yet.</div>;
   }
 
-  const [subjectStats, overall, criteriaSummary, enrollmentCount, trend, subjectTrends, riskBreakdown, atRisk] =
+  const [subjectStats, overall, criteriaSummary, enrollmentCount, trend, subjectTrends, atRisk] =
     await Promise.all([
       getClassSubjectStats(cls.id, term.id),
       getClassOverallStat(cls.id, term.id),
@@ -51,7 +51,6 @@ export default async function ClassDetailPage({ params }: ClassDetailPageProps) 
       prisma.enrollment.count({ where: { classSectionId: cls.id, role: "STUDENT" } }),
       getClassAssignmentTrend(cls.id, term.academicYearId),
       getClassSubjectTrends(cls.courseId, term.academicYearId),
-      getClassRiskBreakdown(cls.id, term.id),
       getClassAtRiskList(cls.id, term.id, 15),
     ]);
 
@@ -91,7 +90,7 @@ export default async function ClassDetailPage({ params }: ClassDetailPageProps) 
         <Card className="transition-transform duration-300 ease-out hover:-translate-y-0.5">
           <CardHeader>
             <CardTitle className="text-xs uppercase tracking-[0.18em] text-[color:var(--accent)]">
-              Avg Final Grade
+              Criterion Average
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -151,17 +150,17 @@ export default async function ClassDetailPage({ params }: ClassDetailPageProps) 
       <section className="stagger grid gap-3 sm:gap-4 xl:grid-cols-[2fr_1fr]">
         <ChartCard
           title="Assignment Trend"
-          subtitle="Assignment-level final grades with term markers"
+          subtitle="Assignment-level criterion scores with term markers"
         >
           <TermTrendLine data={trend} />
         </ChartCard>
-        <ChartCard title="Risk Breakdown" subtitle="Current term risk profile">
-          <RiskBreakdownPie data={riskBreakdown} />
+        <ChartCard title="Criterion Profile" subtitle="Current term criterion averages (0-8)">
+          <CriteriaComparisonBars values={criteriaSummary} />
         </ChartCard>
       </section>
 
       <div className="stagger">
-        <ChartCard title="Subject Trends" subtitle="Trimester comparison by subject">
+        <ChartCard title="Criterion Trends" subtitle="Academic-year criterion progression">
           <SubjectTrendLines data={subjectTrends} />
         </ChartCard>
       </div>
@@ -170,7 +169,7 @@ export default async function ClassDetailPage({ params }: ClassDetailPageProps) 
         title="At-Risk Students"
         data={atRisk}
         exportHref={`/api/reports/classes/${cls.id}`}
-        termId={term.id}
+        yearId={term.academicYearId}
       />
 
       <AdminNotes pageKey={`class:${cls.id}`} />

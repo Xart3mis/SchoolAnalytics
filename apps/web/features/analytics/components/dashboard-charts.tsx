@@ -4,7 +4,7 @@ import dynamic from "next/dynamic";
 import { Suspense } from "react";
 
 import { ChartCard } from "@/features/analytics/components/chart-card";
-import type { DistributionSlice, TrendPoint } from "@/lib/analytics/dashboard";
+import type { CriterionTrendPoint, DistributionSlice } from "@/lib/analytics/dashboard";
 
 const PerformanceAreaChart = dynamic(
   () =>
@@ -23,7 +23,7 @@ const DemographicsPieChart = dynamic(
 );
 
 interface DashboardChartsProps {
-  performanceTrend: TrendPoint[];
+  performanceTrend: CriterionTrendPoint[];
   gradeDistribution: DistributionSlice[];
 }
 
@@ -33,7 +33,7 @@ export function DashboardCharts({
 }: DashboardChartsProps) {
   return (
     <section className="stagger grid gap-3 sm:gap-4 xl:grid-cols-[2fr_1fr]">
-      <ChartCard title="Final Grade Trends" subtitle="Average final grade per term (1-7)">
+      <ChartCard title="Criterion Trends" subtitle="Per-criterion progression by term (0-8)">
         <Suspense fallback={<div className="h-64" />}>
           <PerformanceAreaChart data={performanceTrend} />
         </Suspense>

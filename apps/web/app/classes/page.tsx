@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AdminNotes } from "@/features/notes/components/admin-notes";
 import { StatTiles } from "@/features/analytics/components/stat-tiles";
-import { getActiveTerm, getActiveTermForYear } from "@/lib/analytics/terms";
+import { resolveSelectedTerm } from "@/lib/analytics/terms";
 import { getClassList } from "@/lib/analytics/lists";
 import { requireSession } from "@/lib/auth/guards";
 
@@ -15,16 +15,11 @@ export default async function ClassesPage({ searchParams }: ClassesPageProps) {
   await requireSession();
   const resolved = await searchParams;
   const query = resolved?.q ?? "";
-  const termId = resolved?.term;
   const yearId = resolved?.year;
-
-  let term = termId ? await getActiveTerm(termId) : null;
-  if (!term && yearId) {
-    term = await getActiveTermForYear(yearId);
-  }
-  if (!term) {
-    term = await getActiveTerm();
-  }
+  const term = await resolveSelectedTerm({
+    yearId,
+    termId: resolved?.term,
+  });
   if (!term) {
     return <div className="text-sm text-[color:var(--text-muted)]">No term data yet.</div>;
   }
@@ -36,9 +31,18 @@ export default async function ClassesPage({ searchParams }: ClassesPageProps) {
       <StatTiles
         items={[
           { id: "classes", label: "Classes", value: classes.length.toLocaleString() },
-          { id: "term", label: "Active Term", value: `${term.name}` },
           { id: "year", label: "Academic Year", value: term.academicYear.name },
-          { id: "grades", label: "Grade Bands", value: "9-12" },
+          { id: "term", label: "Snapshot Term", value: `${term.name}` },
+          {
+            id: "criterion",
+            label: "Avg Criterion",
+            value:
+              classes.length > 0
+                ? (
+                    classes.reduce((sum, cls) => sum + cls.averageScore, 0) / classes.length
+                  ).toFixed(2)
+                : "0.00",
+          },
         ]}
       />
 
@@ -48,7 +52,6 @@ export default async function ClassesPage({ searchParams }: ClassesPageProps) {
             Classes
           </CardTitle>
           <form className="mt-3 flex w-full items-center gap-2 sm:mt-0 sm:w-auto">
-            {termId ? <input type="hidden" name="term" value={termId} /> : null}
             {yearId ? <input type="hidden" name="year" value={yearId} /> : null}
             <input
               name="q"
@@ -60,25 +63,29 @@ export default async function ClassesPage({ searchParams }: ClassesPageProps) {
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            <div className="min-w-[520px]">
-              <div className="grid grid-cols-3 gap-4 border-b border-[color:var(--border)] pb-2 text-xs font-semibold uppercase text-[color:var(--text-muted)]">
+            <div className="min-w-[760px]">
+              <div className="grid grid-cols-5 gap-4 border-b border-[color:var(--border)] pb-2 text-xs font-semibold uppercase text-[color:var(--text-muted)]">
                 <div>Class</div>
                 <div>Grade</div>
+                <div>Criterion Avg</div>
+                <div>Students</div>
                 <div>Year</div>
               </div>
               <div className="divide-y divide-[color:var(--border)]">
                 {classes.map((cls) => (
                   <div
                     key={cls.id}
-                    className="grid grid-cols-3 gap-4 py-3 text-[13px] text-[color:var(--text)] sm:text-sm"
+                    className="grid grid-cols-5 gap-4 py-3 text-[13px] text-[color:var(--text)] sm:text-sm"
                   >
                     <Link
-                      href={`/classes/${cls.id}?term=${term.id}`}
+                      href={`/classes/${cls.id}?year=${term.academicYearId}`}
                       className="font-medium text-[color:var(--text)] hover:text-[color:var(--accent-3)]"
                     >
                       {cls.name}
                     </Link>
                     <div>Grade {cls.gradeLevel}</div>
+                    <div>{cls.averageScore.toFixed(2)}</div>
+                    <div>{cls.studentCount}</div>
                     <div>{cls.academicYear}</div>
                   </div>
                 ))}
