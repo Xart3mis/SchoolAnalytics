@@ -29,6 +29,13 @@ const worker = new Worker(
       return { ok: true, source: sourceName };
     }
 
+    if (job.name === "cleanup-expired-sessions") {
+      const { count } = await prisma.session.deleteMany({
+        where: { expiresAt: { lt: new Date() } },
+      });
+      return { ok: true, deletedSessions: count };
+    }
+
     return { ok: true, skipped: true };
   },
   { connection }
@@ -46,14 +53,56 @@ worker.on("failed", (job, err) => {
   console.error(`[worker] failed job ${job ? job.id : "unknown"}:`, err.message);
 });
 
-async function shutdown(signal) {
+let shuttingDown = false;
+
+async function shutdown(signal, exitCode = 0) {
+  if (shuttingDown) {
+    return;
+  }
+  shuttingDown = true;
   console.log(`[worker] received ${signal}, shutting down...`);
-  await worker.close();
-  await connection.quit();
-  await prisma.$disconnect();
-  await pool.end();
-  process.exit(0);
+  try {
+    await worker.close();
+  } catch (error) {
+    console.error("[worker] failed to close BullMQ worker:", error);
+  }
+  try {
+    await connection.quit();
+  } catch (error) {
+    console.error("[worker] failed to close Redis connection:", error);
+  }
+  try {
+    await prisma.$disconnect();
+  } catch (error) {
+    console.error("[worker] failed to disconnect Prisma:", error);
+  }
+  try {
+    await pool.end();
+  } catch (error) {
+    console.error("[worker] failed to close PG pool:", error);
+  }
+  process.exit(exitCode);
 }
 
-process.on("SIGINT", () => shutdown("SIGINT"));
-process.on("SIGTERM", () => shutdown("SIGTERM"));
+async function shutdownFromFatal(signal, error) {
+  console.error(`[worker] ${signal}:`, error);
+  await shutdown(signal, 1);
+}
+
+connection.on("error", (error) => {
+  console.error("[worker] Redis connection error:", error);
+});
+
+process.on("SIGINT", () => {
+  void shutdown("SIGINT");
+});
+process.on("SIGTERM", () => {
+  void shutdown("SIGTERM");
+});
+process.on("uncaughtException", (error) => {
+  void shutdownFromFatal("uncaughtException", error);
+});
+process.on("unhandledRejection", (reason) => {
+  const error = reason instanceof Error ? reason : new Error(String(reason));
+  void shutdownFromFatal("unhandledRejection", error);
+});
