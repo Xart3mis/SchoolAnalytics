@@ -55,8 +55,8 @@ export default async function ClassDetailPage({ params }: ClassDetailPageProps) 
     ]);
 
   const gradeLabel = cls.course.gradeLevel?.name
-    ? `Grade ${cls.course.gradeLevel.name}`
-    : "Grade N/A";
+    ? `Level ${cls.course.gradeLevel.name}`
+    : "Level N/A";
 
   return (
     <div className="flex flex-col gap-6">

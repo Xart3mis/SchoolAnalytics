@@ -74,7 +74,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
       <EntityComparisonPanels
         sections={[
-          { id: "grades", title: "Grade vs Grade", rows: data.comparisons.grades },
+          { id: "grades", title: "Level vs Level", rows: data.comparisons.grades },
           { id: "classes", title: "Class vs Class", rows: data.comparisons.classes },
           { id: "students", title: "Student vs Student", rows: data.comparisons.students },
         ]}

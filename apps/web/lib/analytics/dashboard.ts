@@ -152,10 +152,12 @@ export async function getDashboardData({
         criterionC: Number(row.criterionC ?? 0),
         criterionD: Number(row.criterionD ?? 0),
       },
-    ])
+    ]),
   );
 
-  const gradeGroups = await prisma.$queryRaw<Array<{ gradeLevel: number; count: number }>>(Prisma.sql`
+  const gradeGroups = await prisma.$queryRaw<
+    Array<{ gradeLevel: number; count: number }>
+  >(Prisma.sql`
     WITH student_course AS (
       SELECT ge."studentId",
              cs."courseId" AS "courseId"
@@ -174,10 +176,15 @@ export async function getDashboardData({
     ORDER BY gl."name"::int ASC
   `);
 
-  const [{ totalStudents, averageScore, highRiskCount } = { totalStudents: 0, averageScore: 0, highRiskCount: 0 }] =
-    await prisma.$queryRaw<
-      { totalStudents: number; averageScore: number; highRiskCount: number }[]
-    >(Prisma.sql`
+  const [
+    { totalStudents, averageScore, highRiskCount } = {
+      totalStudents: 0,
+      averageScore: 0,
+      highRiskCount: 0,
+    },
+  ] = await prisma.$queryRaw<
+    { totalStudents: number; averageScore: number; highRiskCount: number }[]
+  >(Prisma.sql`
       SELECT
         COUNT(*)::int AS "totalStudents",
         AVG(stats."criterionAvg")::float AS "averageScore",
@@ -269,19 +276,20 @@ export async function getDashboardData({
   `);
   const atRiskTotalCount = atRiskRows[0]?.totalCount ?? 0;
 
-  const [gradeComparisons, classComparisons, studentComparisons] = await Promise.all([
-    prisma.$queryRaw<
-      Array<{
-        id: string;
-        label: string;
-        averageScore: number;
-        criterionA: number;
-        criterionB: number;
-        criterionC: number;
-        criterionD: number;
-        cohortSize: number;
-      }>
-    >(Prisma.sql`
+  const [gradeComparisons, classComparisons, studentComparisons] =
+    await Promise.all([
+      prisma.$queryRaw<
+        Array<{
+          id: string;
+          label: string;
+          averageScore: number;
+          criterionA: number;
+          criterionB: number;
+          criterionC: number;
+          criterionD: number;
+          cohortSize: number;
+        }>
+      >(Prisma.sql`
       WITH student_course AS (
         SELECT ge."studentId",
                cs."courseId" AS "courseId",
@@ -297,7 +305,7 @@ export async function getDashboardData({
         GROUP BY ge."studentId", cs."courseId"
       )
       SELECT gl."name" AS id,
-             CONCAT('Grade ', gl."name") AS label,
+             CONCAT('Level ', gl."name") AS label,
              AVG(student_course."criterionA")::float AS "criterionA",
              AVG(student_course."criterionB")::float AS "criterionB",
              AVG(student_course."criterionC")::float AS "criterionC",
@@ -310,18 +318,18 @@ export async function getDashboardData({
       GROUP BY gl."name"
       ORDER BY "averageScore" DESC, gl."name"::int ASC
     `),
-    prisma.$queryRaw<
-      Array<{
-        id: string;
-        label: string;
-        averageScore: number;
-        criterionA: number;
-        criterionB: number;
-        criterionC: number;
-        criterionD: number;
-        cohortSize: number;
-      }>
-    >(Prisma.sql`
+      prisma.$queryRaw<
+        Array<{
+          id: string;
+          label: string;
+          averageScore: number;
+          criterionA: number;
+          criterionB: number;
+          criterionC: number;
+          criterionD: number;
+          cohortSize: number;
+        }>
+      >(Prisma.sql`
       WITH student_course AS (
         SELECT ge."studentId",
                cs."id" AS "classId",
@@ -349,18 +357,18 @@ export async function getDashboardData({
       GROUP BY "classId", "className"
       ORDER BY "averageScore" DESC, "cohortSize" DESC
     `),
-    prisma.$queryRaw<
-      Array<{
-        id: string;
-        label: string;
-        averageScore: number;
-        criterionA: number;
-        criterionB: number;
-        criterionC: number;
-        criterionD: number;
-        cohortSize: number;
-      }>
-    >(Prisma.sql`
+      prisma.$queryRaw<
+        Array<{
+          id: string;
+          label: string;
+          averageScore: number;
+          criterionA: number;
+          criterionB: number;
+          criterionC: number;
+          criterionD: number;
+          cohortSize: number;
+        }>
+      >(Prisma.sql`
       WITH student_course AS (
         SELECT ge."studentId",
                cs."courseId" AS "courseId",
@@ -398,7 +406,7 @@ export async function getDashboardData({
       JOIN "User" u ON u."id" = s."userId"
       ORDER BY student_stats."averageScore" DESC
     `),
-  ]);
+    ]);
 
   return {
     kpis: [
@@ -434,15 +442,21 @@ export async function getDashboardData({
       };
     }),
     gradeDistribution: gradeGroups.map((group) => ({
-      label: `Grade ${group.gradeLevel}`,
+      label: `Level ${group.gradeLevel}`,
       value: group.count,
     })),
     atRisk: atRiskRows
-      .filter((row) => row.studentId && row.fullName && row.gradeLevel !== null && row.avgScore !== null)
+      .filter(
+        (row) =>
+          row.studentId &&
+          row.fullName &&
+          row.gradeLevel !== null &&
+          row.avgScore !== null,
+      )
       .map((row) => ({
         id: row.studentId as string,
         name: row.fullName as string,
-        gradeLevel: `Grade ${row.gradeLevel}`,
+        gradeLevel: `Level ${row.gradeLevel}`,
         averageScore: Number(row.avgScore),
         riskLevel: riskLevel(Number(row.avgScore)),
       })),

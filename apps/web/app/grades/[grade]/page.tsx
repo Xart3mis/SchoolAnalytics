@@ -83,7 +83,7 @@ export default async function GradeDetailPage({ params, searchParams }: GradeDet
         <Card className="transition-transform duration-300 ease-out hover:-translate-y-0.5">
           <CardHeader>
             <CardTitle className="text-xs uppercase tracking-[0.18em] text-[color:var(--accent)]">
-              Grade
+              Level
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -139,30 +139,30 @@ export default async function GradeDetailPage({ params, searchParams }: GradeDet
             id: "criterion-a",
             label: "Criterion A",
             value: criteriaSummary.criterionA.toFixed(1),
-            helper: "Avg across grade",
+            helper: "Avg across level",
           },
           {
             id: "criterion-b",
             label: "Criterion B",
             value: criteriaSummary.criterionB.toFixed(1),
-            helper: "Avg across grade",
+            helper: "Avg across level",
           },
           {
             id: "criterion-c",
             label: "Criterion C",
             value: criteriaSummary.criterionC.toFixed(1),
-            helper: "Avg across grade",
+            helper: "Avg across level",
           },
           {
             id: "criterion-d",
             label: "Criterion D",
             value: criteriaSummary.criterionD.toFixed(1),
-            helper: "Avg across grade",
+            helper: "Avg across level",
           },
         ]}
       />
 
-      <SubjectStatsTable title="Grade Subject Performance" data={subjectStats} />
+      <SubjectStatsTable title="Level Subject Performance" data={subjectStats} />
 
       <section className="stagger grid gap-3 sm:gap-4 xl:grid-cols-[2fr_1fr]">
         <ChartCard

@@ -72,7 +72,7 @@ export default async function GradesPage({ searchParams }: GradesPageProps) {
     <div className="flex flex-col gap-6">
       <StatTiles
         items={[
-          { id: "grades", label: "Grade Levels", value: grades.length.toString() },
+          { id: "grades", label: "Levels", value: grades.length.toString() },
           { id: "year", label: "Academic Year", value: term.academicYear.name },
           { id: "term", label: "Snapshot Term", value: `${term.name}` },
           {
@@ -86,14 +86,14 @@ export default async function GradesPage({ searchParams }: GradesPageProps) {
       <Card className="transition-transform duration-300 ease-out hover:-translate-y-0.5">
         <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle className="text-xs uppercase tracking-[0.18em] text-[color:var(--accent)] sm:text-sm">
-            Grades
+            Levels
           </CardTitle>
           <form className="flex w-full items-center gap-2 sm:w-auto">
             {yearId ? <input type="hidden" name="year" value={yearId} /> : null}
             <input
               name="q"
               defaultValue={query}
-              placeholder="Filter grade..."
+              placeholder="Filter level..."
               className="h-8 w-full rounded-md border border-[color:var(--border)] bg-[color:var(--surface)] px-3 text-xs text-[color:var(--text)] placeholder:text-[color:var(--text-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[color:var(--accent)] sm:w-56"
             />
           </form>
@@ -102,7 +102,7 @@ export default async function GradesPage({ searchParams }: GradesPageProps) {
           <div className="overflow-x-auto">
             <div className="min-w-[700px]">
               <div className="grid grid-cols-4 gap-4 border-b border-[color:var(--border)] pb-2 text-xs font-semibold uppercase text-[color:var(--text-muted)]">
-                <div>Grade</div>
+                <div>Level</div>
                 <div>Students</div>
                 <div>Criterion Avg</div>
                 <div>Action</div>
@@ -114,7 +114,7 @@ export default async function GradesPage({ searchParams }: GradesPageProps) {
                     className="grid grid-cols-4 gap-4 py-3 text-[13px] text-[color:var(--text)] sm:text-sm"
                   >
                     <div className="font-medium text-[color:var(--text)]">
-                      Grade {grade.gradeLevel}
+                      Level {grade.gradeLevel}
                     </div>
                     <div>{grade.count.toLocaleString()}</div>
                     <div>{Number(grade.averageScore).toFixed(2)}</div>
@@ -128,7 +128,7 @@ export default async function GradesPage({ searchParams }: GradesPageProps) {
                 ))}
                 {filteredGrades.length === 0 ? (
                   <div className="py-6 text-sm text-[color:var(--text-muted)]">
-                    {grades.length === 0 ? "No grades found." : "No grades match the filter."}
+                    {grades.length === 0 ? "No levels found." : "No levels match the filter."}
                   </div>
                 ) : null}
               </div>

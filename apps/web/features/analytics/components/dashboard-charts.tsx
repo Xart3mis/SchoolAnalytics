@@ -48,7 +48,7 @@ export function DashboardCharts({
           <PerformanceAreaChart data={performanceTrend} />
         </Suspense>
       </ChartCard>
-      <ChartCard title="Student Distribution" subtitle="By grade">
+      <ChartCard title="Student Distribution" subtitle="By level">
         <Suspense fallback={<ChartSkeleton />}>
           <DemographicsPieChart data={gradeDistribution} />
         </Suspense>

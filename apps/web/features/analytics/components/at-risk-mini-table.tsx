@@ -44,7 +44,7 @@ export function AtRiskMiniTable({ title, data, exportHref, yearId }: AtRiskMiniT
         <div className="min-w-[520px]">
           <div className="grid grid-cols-4 gap-3 border-b border-[color:var(--border)] px-4 py-2 text-xs font-semibold uppercase text-[color:var(--text-muted)]">
             <div>Student</div>
-            <div>Grade</div>
+            <div>Level</div>
             <div>Criterion Avg</div>
             <div>Risk</div>
           </div>
@@ -63,7 +63,7 @@ export function AtRiskMiniTable({ title, data, exportHref, yearId }: AtRiskMiniT
                   >
                     {row.fullName}
                   </Link>
-                  <div>Grade {row.gradeLevel}</div>
+                  <div>Level {row.gradeLevel}</div>
                   <div>{row.averageScore.toFixed(2)}</div>
                   <div>
                     <span
