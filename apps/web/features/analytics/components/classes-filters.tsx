@@ -4,13 +4,13 @@ import * as React from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ThemedSelect } from "@/components/ui/themed-select";
 
-interface StudentsFiltersProps {
+interface ClassesFiltersProps {
   initialGrade?: number;
   yearId?: string;
   termId?: string;
 }
 
-export function StudentsFilters({ initialGrade, yearId, termId }: StudentsFiltersProps) {
+export function ClassesFilters({ initialGrade, yearId, termId }: ClassesFiltersProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();

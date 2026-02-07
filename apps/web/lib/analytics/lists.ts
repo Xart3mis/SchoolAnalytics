@@ -50,7 +50,13 @@ export async function getStudentList({
       : Prisma.empty;
 
   const rows = await prisma.$queryRaw<
-    Array<{ id: string; fullName: string; gradeLevel: number; averageScore: number; totalCount: number }>
+    Array<{
+      id: string;
+      fullName: string;
+      gradeLevel: number;
+      averageScore: number;
+      totalCount: number;
+    }>
   >(Prisma.sql`
     WITH student_course AS (
       SELECT ge."studentId",
@@ -111,7 +117,11 @@ export async function getStudentList({
   };
 }
 
-export async function getClassList(termId: string, query?: string) {
+export async function getClassList(
+  termId: string,
+  query?: string,
+  gradeLevel?: number,
+) {
   const search = query?.trim();
   const searchClause = search
     ? Prisma.sql`AND (
@@ -119,6 +129,10 @@ export async function getClassList(termId: string, query?: string) {
         OR LOWER(c."name") LIKE ${`%${search.toLowerCase()}%`}
       )`
     : Prisma.empty;
+  const gradeClause =
+    typeof gradeLevel === "number"
+      ? Prisma.sql`AND gl."name"::int = ${gradeLevel}`
+      : Prisma.empty;
 
   return prisma.$queryRaw<ClassListRow[]>(Prisma.sql`
     WITH student_course AS (
@@ -155,6 +169,7 @@ export async function getClassList(termId: string, query?: string) {
     LEFT JOIN class_stats ON class_stats."classId" = cs."id"
     WHERE cs."academicTermId" = ${termId}
     ${searchClause}
+    ${gradeClause}
     ORDER BY class_stats."averageScore" DESC NULLS LAST, gl."name"::int ASC, cs."name" ASC
   `);
 }
