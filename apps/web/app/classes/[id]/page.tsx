@@ -49,7 +49,7 @@ export default async function ClassDetailPage({ params }: ClassDetailPageProps) 
       getClassOverallStat(cls.id, term.id),
       getClassCriteriaSummary(cls.id, term.id),
       prisma.enrollment.count({ where: { classSectionId: cls.id, role: "STUDENT" } }),
-      getClassAssignmentTrend(cls.id, term.academicYearId),
+      getClassAssignmentTrend(cls.id, term.academicYearId, term.id),
       getClassSubjectTrends(cls.courseId, term.academicYearId),
       getClassAtRiskList(cls.id, term.id, 15),
     ]);
@@ -151,16 +151,63 @@ export default async function ClassDetailPage({ params }: ClassDetailPageProps) 
         <ChartCard
           title="Assignment Trend"
           subtitle="Assignment-level criterion scores with term markers"
+          exportContext={{
+            entity: "Class",
+            year: term.academicYear.name,
+            term: term.name,
+            chartType: "Assignment Trends",
+          }}
+          exportRows={trend.map((point) => ({
+            pointType: point.kind,
+            label: point.fullLabel,
+            criterionA: point.criterionA ?? "",
+            criterionB: point.criterionB ?? "",
+            criterionC: point.criterionC ?? "",
+            criterionD: point.criterionD ?? "",
+          }))}
         >
           <TermTrendLine data={trend} />
         </ChartCard>
-        <ChartCard title="Criterion Profile" subtitle="Current term criterion averages (0-8)">
+        <ChartCard
+          title="Criterion Profile"
+          subtitle="Current term criterion averages (0-8)"
+          exportContext={{
+            entity: "Class",
+            year: term.academicYear.name,
+            term: term.name,
+            chartType: "Criterion Profile",
+          }}
+          exportRows={[
+            {
+              criterionA: criteriaSummary.criterionA,
+              criterionB: criteriaSummary.criterionB,
+              criterionC: criteriaSummary.criterionC,
+              criterionD: criteriaSummary.criterionD,
+            },
+          ]}
+        >
           <CriteriaComparisonBars values={criteriaSummary} />
         </ChartCard>
       </section>
 
       <div className="stagger">
-        <ChartCard title="Criterion Trends" subtitle="Academic-year criterion progression">
+        <ChartCard
+          title="Criterion Trends"
+          subtitle="Academic-year criterion progression"
+          exportContext={{
+            entity: "Class",
+            year: term.academicYear.name,
+            term: term.name,
+            chartType: "Criterion Trends",
+          }}
+          exportRows={subjectTrends.map((point) => ({
+            term: point.label,
+            criterionA: point.criterionA,
+            criterionB: point.criterionB,
+            criterionC: point.criterionC,
+            criterionD: point.criterionD,
+          }))}
+        >
           <SubjectTrendLines data={subjectTrends} />
         </ChartCard>
       </div>

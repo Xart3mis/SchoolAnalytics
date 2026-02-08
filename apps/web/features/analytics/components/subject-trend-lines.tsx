@@ -28,31 +28,25 @@ interface SubjectTrendLinesProps {
 }
 
 export function SubjectTrendLines({ data }: SubjectTrendLinesProps) {
-  const [criterion, setCriterion] = React.useState<"all" | "criterionA" | "criterionB" | "criterionC" | "criterionD">("all");
-  const visibleSeries =
-    criterion === "all" ? SERIES : SERIES.filter((series) => series.key === criterion);
+  const [visibleSeries, setVisibleSeries] = React.useState({
+    criterionA: true,
+    criterionB: true,
+    criterionC: true,
+    criterionD: true,
+  });
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setCriterion("all")}
-          className={`rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${
-            criterion === "all"
-              ? "border-[color:var(--border)] bg-[color:var(--surface-strong)] text-[color:var(--text)]"
-              : "border-[color:var(--border)] text-[color:var(--text-muted)]"
-          }`}
-        >
-          All Criteria
-        </button>
         {SERIES.map((series) => (
           <button
             key={series.key}
             type="button"
-            onClick={() => setCriterion(series.key)}
+            onClick={() =>
+              setVisibleSeries((prev) => ({ ...prev, [series.key]: !prev[series.key] }))
+            }
             className={`rounded-md border px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${
-              criterion === series.key
+              visibleSeries[series.key]
                 ? "border-[color:var(--border)] bg-[color:var(--surface-strong)] text-[color:var(--text)]"
                 : "border-[color:var(--border)] text-[color:var(--text-muted)]"
             }`}
@@ -83,8 +77,8 @@ export function SubjectTrendLines({ data }: SubjectTrendLinesProps) {
             {...chartTooltipProps}
             formatter={(value?: number, name?: string) => [`${(value ?? 0).toFixed(2)}`, name ?? "Criterion"]}
           />
-          {criterion === "all" ? <Legend /> : null}
-          {visibleSeries.map((series) => (
+          <Legend />
+          {SERIES.filter((series) => visibleSeries[series.key]).map((series) => (
             <Line
               key={series.key}
               type="monotone"
