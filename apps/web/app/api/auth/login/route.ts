@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     });
 
     const user = await prisma.user.findUnique({ where: { email: payload.email } });
-    if (!user?.passwordHash) {
+    if (!user || user.status !== "ACTIVE" || !user.passwordHash) {
       throw new ApiError("Invalid credentials.", 401);
     }
 
