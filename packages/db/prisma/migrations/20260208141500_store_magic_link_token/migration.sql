@@ -1,0 +1,2 @@
+ALTER TABLE "MagicLink"
+ADD COLUMN "token" TEXT;

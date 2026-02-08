@@ -60,14 +60,33 @@ enum UserRole {
   USER // Fallback for existing schema compatibility
 }
 
+enum UserStatus {
+  INVITED
+  ACTIVE
+  DISABLED
+}
+
+enum MagicLinkPurpose {
+  INVITE_ACTIVATE
+  LOGIN
+}
+
+enum AuthAuditEventType {
+  MAGIC_LINK_REQUESTED
+  MAGIC_LINK_CONSUMED
+  MAGIC_LINK_CONSUME_FAILED
+  PASSWORD_SET
+}
+
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
+  id           String     @id @default(uuid())
+  email        String     @unique
   passwordHash String? // Optional if using SSO
-  role         UserRole @default(USER)
+  role         UserRole   @default(USER)
+  status       UserStatus @default(INVITED)
   displayName  String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
 
   // Multi-tenancy
   organization   Organization? @relation(fields: [organizationId], references: [id])
@@ -78,8 +97,10 @@ model User {
   staffProfile   Staff?
 
   // Existing schema compatibility
-  sessions   Session[]
-  adminNotes AdminNote[]
+  sessions        Session[]
+  adminNotes      AdminNote[]
+  magicLinks      MagicLink[]
+  authAuditEvents AuthAuditEvent[]
 }
 
 model Session {
@@ -91,6 +112,40 @@ model Session {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([expiresAt])
+}
+
+model MagicLink {
+  id                String           @id @default(cuid())
+  userId            String
+  purpose           MagicLinkPurpose
+  token             String?
+  tokenHash         String           @unique
+  expiresAt         DateTime
+  usedAt            DateTime?
+  invalidatedAt     DateTime?
+  requestedByIp     String?
+  requestedUserAgent String?
+  consumedByIp      String?
+  consumedUserAgent String?
+  createdAt         DateTime         @default(now())
+  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose, expiresAt])
+}
+
+model AuthAuditEvent {
+  id        String             @id @default(cuid())
+  userId    String?
+  emailHash String?
+  eventType AuthAuditEventType
+  ipAddress String?
+  userAgent String?
+  metadata  Json?
+  createdAt DateTime           @default(now())
+  user      User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([eventType, createdAt])
 }
 
 model Student {
