@@ -8,7 +8,9 @@ import { Input } from "@/components/ui/input";
 
 export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
+  const [magicStatus, setMagicStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [magicLoading, setMagicLoading] = useState(false);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -37,6 +39,28 @@ export default function LoginPage() {
     window.location.href = "/";
   }
 
+  async function handleMagicLinkRequest(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setMagicStatus(null);
+    setMagicLoading(true);
+
+    const formData = new FormData(event.currentTarget);
+    const payload = {
+      email: String(formData.get("email") ?? ""),
+      purpose: "LOGIN",
+    };
+
+    const response = await fetch("/api/auth/magic/request", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    const result = await response.json().catch(() => ({}));
+    setMagicStatus(result.message ?? "If eligible, a sign-in link has been issued.");
+    setMagicLoading(false);
+  }
+
   return (
     <div className="app-background flex min-h-screen items-center justify-center px-6">
       <Card className="w-full max-w-md shadow-[0_30px_60px_-40px_rgba(44,73,127,0.3)] dark:shadow-[0_30px_60px_-40px_rgba(0,14,20,0.8)] animate-fade-up">
@@ -61,6 +85,14 @@ export default function LoginPage() {
             {error ? <p className="text-sm text-red-500">{error}</p> : null}
             <Button className="w-full" type="submit" disabled={loading}>
               {loading ? "Signing in..." : "Sign in"}
+            </Button>
+          </form>
+          <form className="mt-4 space-y-3 border-t border-[color:var(--border)] pt-4" onSubmit={handleMagicLinkRequest}>
+            <p className="text-xs text-[color:var(--text-muted)]">Need a sign-in link instead?</p>
+            <Input name="email" type="email" placeholder="you@school.org" required />
+            {magicStatus ? <p className="text-xs text-[color:var(--text-muted)]">{magicStatus}</p> : null}
+            <Button className="w-full" type="submit" disabled={magicLoading}>
+              {magicLoading ? "Sending..." : "Email sign-in link"}
             </Button>
           </form>
         </CardContent>
