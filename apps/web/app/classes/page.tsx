@@ -78,7 +78,7 @@ export default async function ClassesPage({ searchParams }: ClassesPageProps) {
                     className="grid grid-cols-5 gap-4 py-3 text-[13px] text-[color:var(--text)] sm:text-sm"
                   >
                     <Link
-                      href={`/classes/${cls.id}?year=${term.academicYearId}`}
+                      href={`/classes/${cls.id}?year=${term.academicYearId}&term=${term.id}`}
                       className="font-medium text-[color:var(--text)] hover:text-[color:var(--accent-3)]"
                     >
                       {cls.name}

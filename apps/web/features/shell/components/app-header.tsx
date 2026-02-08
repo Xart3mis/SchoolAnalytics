@@ -76,10 +76,14 @@ export function AppHeader() {
     academicYears[0];
   const selectedTerm = selectedTermId
     ? selectedYear?.terms.find((term) => term.id === selectedTermId)
-    : selectedYear?.terms[2] ?? undefined;
+    : selectedYear?.terms.at(-1) ?? undefined;
   const selectedYearLabel = selectedYear ? `${selectedYear.name}` : "Select year";
   const selectedTermLabel = selectedTerm?.name ?? "T-";
-  const yearQuery = selectedYear?.id ? `?year=${selectedYear.id}` : "";
+  const yearTermQuery = new URLSearchParams();
+  if (selectedYear?.id) yearTermQuery.set("year", selectedYear.id);
+  if (selectedTerm?.id) yearTermQuery.set("term", selectedTerm.id);
+  const yearTermQueryString = yearTermQuery.toString();
+  const yearTermSuffix = yearTermQueryString ? `?${yearTermQueryString}` : "";
 
   React.useEffect(() => {
     function handleClick(event: MouseEvent) {
@@ -220,6 +224,9 @@ export function AppHeader() {
                 if (selectedYear?.id) {
                   params.set("year", selectedYear.id);
                 }
+                if (selectedTerm?.id) {
+                  params.set("term", selectedTerm.id);
+                }
                 router.push(`/students?${params.toString()}`);
                 setOpen(false);
               }
@@ -248,7 +255,7 @@ export function AppHeader() {
                         {results.students.map((student) => (
                           <Link
                             key={student.id}
-                            href={`/students/${student.id}${yearQuery}`}
+                            href={`/students/${student.id}${yearTermSuffix}`}
                             onClick={() => setOpen(false)}
                             className="rounded-lg px-2 py-2 text-sm text-[color:var(--text)] transition-colors hover:bg-[color:var(--surface-strong)]"
                           >
@@ -268,7 +275,7 @@ export function AppHeader() {
                         {results.classes.map((cls) => (
                           <Link
                             key={cls.id}
-                            href={`/classes/${cls.id}${yearQuery}`}
+                            href={`/classes/${cls.id}${yearTermSuffix}`}
                             onClick={() => setOpen(false)}
                             className="rounded-lg px-2 py-2 text-sm text-[color:var(--text)] transition-colors hover:bg-[color:var(--surface-strong)]"
                           >
@@ -370,7 +377,7 @@ export function AppHeader() {
                   Trimester
                 </div>
                 <ThemedSelect
-                  value={selectedTermId}
+                  value={selectedTermId || selectedTerm?.id || ""}
                   onChange={(event) => handleSelectTrimester(event.target.value)}
                   disabled={!selectedYear || selectedYear.terms.length === 0}
                   className="mt-2"

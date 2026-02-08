@@ -90,6 +90,7 @@ export default async function GradesPage({ searchParams }: GradesPageProps) {
           </CardTitle>
           <form className="flex w-full items-center gap-2 sm:w-auto">
             {yearId ? <input type="hidden" name="year" value={yearId} /> : null}
+            <input type="hidden" name="term" value={term.id} />
             <input
               name="q"
               defaultValue={query}
@@ -119,7 +120,7 @@ export default async function GradesPage({ searchParams }: GradesPageProps) {
                     <div>{grade.count.toLocaleString()}</div>
                     <div>{Number(grade.averageScore).toFixed(2)}</div>
                     <Link
-                      href={`/grades/${grade.gradeLevel}?year=${term.academicYearId}`}
+                      href={`/grades/${grade.gradeLevel}?year=${term.academicYearId}&term=${term.id}`}
                       className="text-[13px] font-medium text-[color:var(--text)] hover:text-[color:var(--accent-3)] sm:text-sm"
                     >
                       View Details

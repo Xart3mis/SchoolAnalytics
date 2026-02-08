@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { GraduationCap, Home, Layers, Users } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { ArrowLeftRight, GraduationCap, Home, Layers, Users } from "lucide-react";
+import { usePathname, useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { useUiStore } from "@/hooks/use-ui-store";
@@ -13,11 +13,20 @@ const navItems = [
   { label: "Students", icon: GraduationCap, href: "/students" },
   { label: "Classes", icon: Users, href: "/classes" },
   { label: "Grades", icon: Layers, href: "/grades" },
+  { label: "Compare", icon: ArrowLeftRight, href: "/compare" },
 ];
 
 export function AppSidebar() {
   const { sidebarOpen, toggleSidebar } = useUiStore();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const year = searchParams.get("year");
+  const term = searchParams.get("term");
+  const preserved = new URLSearchParams();
+  if (year) preserved.set("year", year);
+  if (term) preserved.set("term", term);
+  const preservedQuery = preserved.toString();
+  const withContext = (href: string) => (preservedQuery ? `${href}?${preservedQuery}` : href);
 
   return (
     <aside
@@ -44,7 +53,7 @@ export function AppSidebar() {
           return (
             <Link
               key={item.label}
-              href={item.href}
+              href={withContext(item.href)}
               className={cn(
                 "flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors",
                 isActive

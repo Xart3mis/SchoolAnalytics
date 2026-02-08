@@ -22,6 +22,7 @@ interface AtRiskTableProps {
   totalCount: number;
   queryString?: string;
   yearId?: string;
+  termId?: string;
 }
 
 function useDebouncedValue<T>(value: T, delayMs: number) {
@@ -42,6 +43,7 @@ export function AtRiskTable({
   totalCount,
   queryString,
   yearId,
+  termId,
 }: AtRiskTableProps) {
   const [nameFilterInput, setNameFilterInput] = React.useState("");
   const debouncedNameFilter = useDebouncedValue(nameFilterInput, 300);
@@ -89,14 +91,19 @@ export function AtRiskTable({
         header: "Actions",
         cell: ({ row }) => (
           <Button asChild size="sm" variant="outline">
-            <Link href={`/students/${row.original.id}${yearId ? `?year=${yearId}` : ""}`}>
+            <Link
+              href={`/students/${row.original.id}?${new URLSearchParams({
+                ...(yearId ? { year: yearId } : {}),
+                ...(termId ? { term: termId } : {}),
+              }).toString()}`}
+            >
               View
             </Link>
           </Button>
         ),
       },
     ],
-    [yearId]
+    [termId, yearId]
   );
 
   // eslint-disable-next-line react-hooks/incompatible-library

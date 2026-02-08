@@ -86,7 +86,7 @@ export default async function StudentsPage({ searchParams }: StudentsPageProps) 
                     className="grid grid-cols-4 gap-4 py-3 text-[13px] text-[color:var(--text)] sm:text-sm"
                   >
                     <Link
-                      href={`/students/${student.id}?year=${term.academicYearId}`}
+                      href={`/students/${student.id}?year=${term.academicYearId}&term=${term.id}`}
                       className="font-medium text-[color:var(--text)] hover:text-[color:var(--accent-3)]"
                     >
                       {student.fullName}
@@ -120,7 +120,7 @@ export default async function StudentsPage({ searchParams }: StudentsPageProps) 
             <div className="flex items-center gap-2">
               {page > 1 ? (
                 <Link
-                  href={`/students?page=${page - 1}&q=${encodeURIComponent(query)}&year=${term.academicYearId}${selectedGrade ? `&grade=${selectedGrade}` : ""}`}
+                  href={`/students?page=${page - 1}&q=${encodeURIComponent(query)}&year=${term.academicYearId}&term=${term.id}${selectedGrade ? `&grade=${selectedGrade}` : ""}`}
                   className="rounded-md border border-[color:var(--border)] px-3 py-1 text-xs text-[color:var(--text)] hover:bg-[color:var(--surface-strong)]"
                 >
                   Previous
@@ -132,7 +132,7 @@ export default async function StudentsPage({ searchParams }: StudentsPageProps) 
               )}
               {page < totalPages ? (
                 <Link
-                  href={`/students?page=${page + 1}&q=${encodeURIComponent(query)}&year=${term.academicYearId}${selectedGrade ? `&grade=${selectedGrade}` : ""}`}
+                  href={`/students?page=${page + 1}&q=${encodeURIComponent(query)}&year=${term.academicYearId}&term=${term.id}${selectedGrade ? `&grade=${selectedGrade}` : ""}`}
                   className="rounded-md border border-[color:var(--border)] px-3 py-1 text-xs text-[color:var(--text)] hover:bg-[color:var(--surface-strong)]"
                 >
                   Next
