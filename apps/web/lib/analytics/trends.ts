@@ -75,8 +75,8 @@ function buildAssignmentTrend(
   const points: AssignmentTrendPoint[] = [];
   points.push({
     id: `start-${terms[0].id}`,
-    label: "0",
-    fullLabel: "Start",
+    label: "Origin",
+    fullLabel: "Origin",
     criterionA: null,
     criterionB: null,
     criterionC: null,
@@ -160,7 +160,11 @@ export async function getStudentAssignmentTrend(studentId: string, academicYearI
   return buildAssignmentTrend(rows, terms);
 }
 
-export async function getClassAssignmentTrend(classSectionId: string, academicYearId: string) {
+export async function getClassAssignmentTrend(
+  classSectionId: string,
+  academicYearId: string,
+  termId?: string
+) {
   const terms = await getTerms(academicYearId);
   if (terms.length === 0) return [];
   const rows = await prisma.$queryRaw<AssignmentRow[]>(Prisma.sql`
@@ -214,7 +218,8 @@ export async function getClassAssignmentTrend(classSectionId: string, academicYe
     ORDER BY scores."termStartDate" ASC, scores."dueDate" ASC NULLS LAST, scores."createdAt" ASC
   `);
 
-  return buildAssignmentTrend(rows, terms);
+  const chartTerms = termId ? terms.filter((term) => term.id === termId) : terms;
+  return buildAssignmentTrend(rows, chartTerms);
 }
 
 export async function getGradeAssignmentTrend(gradeLevel: number, academicYearId: string) {
