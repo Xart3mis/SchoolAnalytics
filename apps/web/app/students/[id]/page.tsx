@@ -157,10 +157,40 @@ export default async function StudentDetailPage({ params, searchParams }: Studen
         <ChartCard
           title="Assignment Trend"
           subtitle="Assignment-level criterion scores with term markers"
+          exportContext={{
+            entity: "Student",
+            year: term.academicYear.name,
+            term: term.name,
+            chartType: "Assignment Trends",
+          }}
+          exportRows={trend.map((point) => ({
+            pointType: point.kind,
+            label: point.fullLabel,
+            criterionA: point.criterionA ?? "",
+            criterionB: point.criterionB ?? "",
+            criterionC: point.criterionC ?? "",
+            criterionD: point.criterionD ?? "",
+          }))}
         >
           <TermTrendLine data={trend} />
         </ChartCard>
-        <ChartCard title="Criterion Trends" subtitle="Academic-year criterion progression">
+        <ChartCard
+          title="Criterion Trends"
+          subtitle="Academic-year criterion progression"
+          exportContext={{
+            entity: "Student",
+            year: term.academicYear.name,
+            term: term.name,
+            chartType: "Criterion Trends",
+          }}
+          exportRows={subjectTrends.map((point) => ({
+            term: point.label,
+            criterionA: point.criterionA,
+            criterionB: point.criterionB,
+            criterionC: point.criterionC,
+            criterionD: point.criterionD,
+          }))}
+        >
           <SubjectTrendLines data={subjectTrends} />
         </ChartCard>
       </section>
