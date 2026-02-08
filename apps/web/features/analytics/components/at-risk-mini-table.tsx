@@ -10,9 +10,10 @@ interface AtRiskMiniTableProps {
   data: AtRiskRow[];
   exportHref: string;
   yearId?: string;
+  termId?: string;
 }
 
-export function AtRiskMiniTable({ title, data, exportHref, yearId }: AtRiskMiniTableProps) {
+export function AtRiskMiniTable({ title, data, exportHref, yearId, termId }: AtRiskMiniTableProps) {
   const [filter, setFilter] = React.useState("");
   const trimmedFilter = filter.trim().toLowerCase();
   const filteredData = trimmedFilter
@@ -58,7 +59,10 @@ export function AtRiskMiniTable({ title, data, exportHref, yearId }: AtRiskMiniT
                   className="grid grid-cols-4 gap-3 px-4 py-3 text-[13px] text-[color:var(--text)] sm:text-sm"
                 >
                   <Link
-                    href={`/students/${row.id}${yearId ? `?year=${yearId}` : ""}`}
+                    href={`/students/${row.id}?${new URLSearchParams({
+                      ...(yearId ? { year: yearId } : {}),
+                      ...(termId ? { term: termId } : {}),
+                    }).toString()}`}
                     className="font-medium text-[color:var(--text)] hover:text-[color:var(--accent-3)]"
                   >
                     {row.fullName}

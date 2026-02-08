@@ -217,6 +217,7 @@ export default async function ClassDetailPage({ params }: ClassDetailPageProps) 
         data={atRisk}
         exportHref={`/api/reports/classes/${cls.id}`}
         yearId={term.academicYearId}
+        termId={term.id}
       />
 
       <AdminNotes pageKey={`class:${cls.id}`} />
