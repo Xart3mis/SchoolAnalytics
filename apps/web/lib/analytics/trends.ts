@@ -62,7 +62,8 @@ type AssignmentRow = {
  */
 function buildAssignmentTrend(
   rows: AssignmentRow[],
-  terms: Array<{ id: string; name: string }>
+  terms: Array<{ id: string; name: string }>,
+  options?: { startLabel?: string; startFullLabel?: string }
 ): AssignmentTrendPoint[] {
   if (terms.length === 0) return [];
   const grouped = new Map<string, AssignmentRow[]>();
@@ -75,8 +76,8 @@ function buildAssignmentTrend(
   const points: AssignmentTrendPoint[] = [];
   points.push({
     id: `start-${terms[0].id}`,
-    label: "Origin",
-    fullLabel: "Origin",
+    label: options?.startLabel ?? "Origin",
+    fullLabel: options?.startFullLabel ?? options?.startLabel ?? "Origin",
     criterionA: null,
     criterionB: null,
     criterionC: null,
@@ -218,8 +219,20 @@ export async function getClassAssignmentTrend(
     ORDER BY scores."termStartDate" ASC, scores."dueDate" ASC NULLS LAST, scores."createdAt" ASC
   `);
 
-  const chartTerms = termId ? terms.filter((term) => term.id === termId) : terms;
-  return buildAssignmentTrend(rows, chartTerms);
+  if (!termId) {
+    return buildAssignmentTrend(rows, terms);
+  }
+
+  const currentTermIndex = terms.findIndex((term) => term.id === termId);
+  const currentTerm = currentTermIndex >= 0 ? terms[currentTermIndex] : undefined;
+  if (!currentTerm) {
+    return buildAssignmentTrend(rows, terms);
+  }
+
+  const previousTerm = currentTermIndex > 0 ? terms[currentTermIndex - 1] : undefined;
+  const startLabel = previousTerm ? previousTerm.name : "Start";
+  const startFullLabel = previousTerm ? previousTerm.name : "Start";
+  return buildAssignmentTrend(rows, [currentTerm], { startLabel, startFullLabel });
 }
 
 export async function getGradeAssignmentTrend(gradeLevel: number, academicYearId: string) {
