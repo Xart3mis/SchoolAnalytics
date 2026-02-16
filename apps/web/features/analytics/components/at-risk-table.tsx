@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
 import type { AtRiskStudent } from "@/lib/analytics/dashboard";
+import { getPaginationState } from "@/lib/pagination";
 
 interface AtRiskTableProps {
   data: AtRiskStudent[];
@@ -21,6 +22,7 @@ interface AtRiskTableProps {
   pageSize: number;
   totalCount: number;
   queryString?: string;
+  basePath?: string;
   yearId?: string;
   termId?: string;
 }
@@ -42,6 +44,7 @@ export function AtRiskTable({
   pageSize,
   totalCount,
   queryString,
+  basePath = "/",
   yearId,
   termId,
 }: AtRiskTableProps) {
@@ -125,20 +128,17 @@ export function AtRiskTable({
     estimateSize: () => 72,
     overscan: 8,
   });
-  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
-  const canPrev = page > 1;
-  const canNext = page < totalPages;
-  const buildHref = React.useCallback(
-    (targetPage: number) => {
-      const params = new URLSearchParams(queryString ?? "");
-      params.set("page", String(targetPage));
-      const query = params.toString();
-      return query ? `/?${query}` : "/";
-    },
-    [queryString]
+  const { totalPages, canPrev, canNext, prevHref, nextHref } = React.useMemo(
+    () =>
+      getPaginationState({
+        page,
+        pageSize,
+        totalCount,
+        queryString,
+        basePath,
+      }),
+    [basePath, page, pageSize, queryString, totalCount]
   );
-  const prevHref = buildHref(page - 1);
-  const nextHref = buildHref(page + 1);
 
   return (
     <div className="rounded-xl border border-[color:var(--border)] bg-[color:var(--surface)] shadow-[0_14px_34px_-26px_rgba(28,36,48,0.3)] transition-transform duration-300 ease-out hover:-translate-y-0.5 dark:shadow-[0_18px_44px_-32px_rgba(0,0,0,0.55)] sm:rounded-2xl">

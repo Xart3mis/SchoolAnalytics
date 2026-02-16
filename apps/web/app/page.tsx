@@ -1,15 +1,19 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { AtRiskTable } from "@/features/analytics/components/at-risk-table";
 import { DashboardCharts } from "@/features/analytics/components/dashboard-charts";
+import { StudentsFilters } from "@/features/analytics/components/students-filters";
+import { StudentsOverviewTable } from "@/features/analytics/components/students-overview-table";
 // import { EntityComparisonPanels } from "@/features/analytics/components/entity-comparison-panels";
 import { AdminNotes } from "@/features/notes/components/admin-notes";
 import { getDashboardData } from "@/lib/analytics/dashboard";
+import { getStudentList } from "@/lib/analytics/lists";
 import { resolveSelectedTerm } from "@/lib/analytics/terms";
 import { requireSession } from "@/lib/auth/guards";
 
 interface DashboardPageProps {
   searchParams?: Promise<{
     page?: string;
+    q?: string;
+    grade?: string;
     term?: string;
     year?: string;
   }>;
@@ -20,26 +24,40 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const resolvedSearchParams = await searchParams;
   const yearId = resolvedSearchParams?.year;
   const requestedPage = Math.max(1, Number(resolvedSearchParams?.page ?? "1"));
-  const pageSize = 20;
+  const query = resolvedSearchParams?.q ?? "";
+  const selectedGradeValue = resolvedSearchParams?.grade ? Number(resolvedSearchParams.grade) : undefined;
+  const selectedGrade = Number.isFinite(selectedGradeValue) ? selectedGradeValue : undefined;
+  const pageSize = 15;
   const term = await resolveSelectedTerm({
     yearId,
     termId: resolvedSearchParams?.term,
   });
-  const initialData = await getDashboardData({
+  const data = await getDashboardData({
     termId: term?.id,
-    atRiskPage: requestedPage,
-    atRiskPageSize: pageSize,
   });
-  const totalPages = Math.max(1, Math.ceil(initialData.atRiskTotalCount / pageSize));
-  const page = Math.min(requestedPage, totalPages);
-  const data =
-    page === requestedPage
-      ? initialData
-      : await getDashboardData({
-          termId: term?.id,
-          atRiskPage: page,
-          atRiskPageSize: pageSize,
-        });
+  const initialStudents =
+    term
+      ? await getStudentList({
+          termId: term.id,
+          page: requestedPage,
+          pageSize,
+          query,
+          gradeLevel: selectedGrade,
+        })
+      : { rows: [], total: 0 };
+  const studentsTotalPages = Math.max(1, Math.ceil(initialStudents.total / pageSize));
+  const studentsPage = Math.min(requestedPage, studentsTotalPages);
+  const studentsData =
+    term && studentsPage !== requestedPage
+      ? await getStudentList({
+          termId: term.id,
+          page: studentsPage,
+          pageSize,
+          query,
+          gradeLevel: selectedGrade,
+        })
+      : initialStudents;
+
   const queryParams = new URLSearchParams();
   if (yearId) {
     queryParams.set("year", yearId);
@@ -50,6 +68,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     queryParams.set("term", resolvedSearchParams.term);
   } else if (term?.id) {
     queryParams.set("term", term.id);
+  }
+  if (query) {
+    queryParams.set("q", query);
+  }
+  if (selectedGrade) {
+    queryParams.set("grade", String(selectedGrade));
   }
 
   return (
@@ -88,15 +112,30 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       {/* /> */}
 
       <section>
-        <AtRiskTable
-          data={data.atRisk}
-          page={page}
-          pageSize={pageSize}
-          totalCount={data.atRiskTotalCount}
-          queryString={queryParams.toString()}
-          yearId={yearId ?? term?.academicYearId}
-          termId={resolvedSearchParams?.term ?? term?.id}
-        />
+        <Card className="transition-transform duration-300 ease-out hover:-translate-y-0.5">
+          <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <CardTitle className="text-xs uppercase tracking-[0.18em] text-[color:var(--accent)] sm:text-sm">
+              Students Overview
+            </CardTitle>
+            <StudentsFilters
+              initialGrade={selectedGrade}
+              yearId={yearId}
+              termId={resolvedSearchParams?.term ?? term?.id}
+            />
+          </CardHeader>
+          <CardContent>
+            <StudentsOverviewTable
+              rows={studentsData.rows}
+              page={studentsPage}
+              pageSize={pageSize}
+              totalCount={studentsData.total}
+              queryString={queryParams.toString()}
+              basePath="/"
+              yearId={yearId ?? term?.academicYearId}
+              termId={resolvedSearchParams?.term ?? term?.id}
+            />
+          </CardContent>
+        </Card>
       </section>
 
       <AdminNotes pageKey="dashboard" />

@@ -115,7 +115,7 @@ export default async function GradesPage({ searchParams }: GradesPageProps) {
                     className="grid grid-cols-4 gap-4 py-3 text-[13px] text-[color:var(--text)] sm:text-sm"
                   >
                     <div className="font-medium text-[color:var(--text)]">
-                      Level {grade.gradeLevel}
+                      MYP {grade.gradeLevel}
                     </div>
                     <div>{grade.count.toLocaleString()}</div>
                     <div>{Number(grade.averageScore).toFixed(2)}</div>
