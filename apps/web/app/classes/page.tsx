@@ -2,9 +2,10 @@ import Link from "next/link";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AdminNotes } from "@/features/notes/components/admin-notes";
+import { ClassesOverviewCharts } from "@/features/analytics/components/classes-overview-charts";
 import { StatTiles } from "@/features/analytics/components/stat-tiles";
 import { resolveSelectedTerm } from "@/lib/analytics/terms";
-import { getClassList } from "@/lib/analytics/lists";
+import { getClassEntityList } from "@/lib/analytics/class-entities";
 import { requireSession } from "@/lib/auth/guards";
 import { ClassesFilters } from "@/features/analytics/components/classes-filters";
 
@@ -28,7 +29,27 @@ export default async function ClassesPage({ searchParams }: ClassesPageProps) {
     return <div className="text-sm text-[color:var(--text-muted)]">No term data yet.</div>;
   }
 
-  const classes = await getClassList(term.id, query, selectedGrade);
+  const classes = await getClassEntityList(term.id, {
+    query,
+    gradeLevel: selectedGrade,
+  });
+
+  const gradeDistribution = Array.from(
+    classes.reduce((map, row) => {
+      const label = row.gradeLevel ? `MYP ${row.gradeLevel}` : "Unknown";
+      map.set(label, (map.get(label) ?? 0) + 1);
+      return map;
+    }, new Map<string, number>())
+  ).map(([label, value]) => ({ label, value }));
+
+  const topClassPerformance = [...classes]
+    .sort((a, b) => b.averageScore - a.averageScore)
+    .slice(0, 10)
+    .map((row) => ({
+      label: row.classLabel,
+      averageScore: row.averageScore,
+      students: row.studentCount,
+    }));
 
   return (
     <div className="flex flex-col gap-6">
@@ -69,7 +90,7 @@ export default async function ClassesPage({ searchParams }: ClassesPageProps) {
                 <div>Level</div>
                 <div>Criterion Avg</div>
                 <div>Students</div>
-                <div>Year</div>
+                <div>Subjects</div>
               </div>
               <div className="divide-y divide-[color:var(--border)]">
                 {classes.map((cls) => (
@@ -81,12 +102,12 @@ export default async function ClassesPage({ searchParams }: ClassesPageProps) {
                       href={`/classes/${cls.id}?year=${term.academicYearId}&term=${term.id}`}
                       className="font-medium text-[color:var(--text)] hover:text-[color:var(--accent-3)]"
                     >
-                      {cls.name}
+                      {cls.classLabel}
                     </Link>
-                    <div>MYP {cls.gradeLevel}</div>
+                    <div>{cls.gradeLevel ? `MYP ${cls.gradeLevel}` : "N/A"}</div>
                     <div>{cls.averageScore.toFixed(2)}</div>
                     <div>{cls.studentCount}</div>
-                    <div>{cls.academicYear}</div>
+                    <div>{cls.subjectCount}</div>
                   </div>
                 ))}
                 {classes.length === 0 ? (
@@ -97,6 +118,13 @@ export default async function ClassesPage({ searchParams }: ClassesPageProps) {
           </div>
         </CardContent>
       </Card>
+
+      <ClassesOverviewCharts
+        gradeDistribution={gradeDistribution}
+        topClassPerformance={topClassPerformance}
+        year={term.academicYear.name}
+        term={term.name}
+      />
 
       <AdminNotes pageKey="classes" />
     </div>

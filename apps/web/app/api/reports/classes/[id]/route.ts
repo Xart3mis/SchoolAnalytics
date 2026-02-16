@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 
+import { getClassEntityDetail } from "@/lib/analytics/class-entities";
 import { getSessionFromCookies } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
-import { Prisma } from "@school-analytics/db/client";
 
 function toCsvRow(values: Array<string | number>) {
   return values
@@ -23,68 +23,33 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   }
 
   const { id } = await context.params;
-  const classRecord = await prisma.classSection.findUnique({
-    where: { id },
-    include: { academicTerm: true },
-  });
-  if (!classRecord) {
-    return NextResponse.json({ error: "Class not found." }, { status: 404 });
-  }
-
-  const term =
-    classRecord.academicTerm ??
-    (await prisma.academicTerm.findFirst({ orderBy: { startDate: "desc" } }));
+  const url = new URL(request.url);
+  const requestedTermId = url.searchParams.get("term") ?? undefined;
+  const requestedYearId = url.searchParams.get("year") ?? undefined;
+  const term = requestedTermId
+    ? await prisma.academicTerm.findUnique({ where: { id: requestedTermId } })
+    : await prisma.academicTerm.findFirst({ orderBy: { startDate: "desc" } });
   if (!term) {
     return NextResponse.json({ error: "No term data." }, { status: 400 });
   }
 
-  const rows = await prisma.$queryRaw<
-    Array<{ id: string; fullName: string; gradeLevel: number; avgScore: number }>
-  >(Prisma.sql`
-    WITH student_course AS (
-      SELECT ge."studentId",
-             cs."courseId" AS "courseId",
-             COALESCE(MAX(CASE WHEN gec."criterion" = 'A'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionA",
-             COALESCE(MAX(CASE WHEN gec."criterion" = 'B'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionB",
-             COALESCE(MAX(CASE WHEN gec."criterion" = 'C'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionC",
-             COALESCE(MAX(CASE WHEN gec."criterion" = 'D'::"MypCriterion" THEN gec."score" END), 0)::float AS "criterionD"
-      FROM "GradeEntry" ge
-      JOIN "GradeEntryCriterion" gec ON gec."gradeEntryId" = ge."id"
-      JOIN "Assignment" a ON a."id" = ge."assignmentId"
-      JOIN "ClassSection" cs ON cs."id" = a."classSectionId"
-      WHERE cs."id" = ${id} AND cs."academicTermId" = ${term.id}
-      GROUP BY ge."studentId", cs."courseId"
-    ),
-    student_stats AS (
-      SELECT "studentId", AVG(("criterionA" + "criterionB" + "criterionC" + "criterionD") / 4.0)::float AS "avgGrade"
-      FROM student_course
-      GROUP BY "studentId"
-    ),
-    grade_levels AS (
-      SELECT student_course."studentId", MIN(gl."name")::int AS "gradeLevel"
-      FROM student_course
-      JOIN "Course" c ON c."id" = student_course."courseId"
-      JOIN "GradeLevel" gl ON gl."id" = c."gradeLevelId"
-      GROUP BY student_course."studentId"
-    )
-    SELECT s."id",
-           COALESCE(u."displayName", CONCAT_WS(' ', s."firstName", s."lastName"), u."email") AS "fullName",
-           grade_levels."gradeLevel" AS "gradeLevel",
-           student_stats."avgGrade"::float AS "avgScore"
-    FROM student_stats
-    JOIN grade_levels ON grade_levels."studentId" = student_stats."studentId"
-    JOIN "Student" s ON s."id" = student_stats."studentId"
-    JOIN "User" u ON u."id" = s."userId"
-    ORDER BY "avgScore" ASC
-  `);
+  const detail = await getClassEntityDetail({
+    routeId: id,
+    termId: term.id,
+    academicYearId: requestedYearId ?? term.academicYearId,
+    atRiskLimit: 2000,
+  });
+  if (!detail) {
+    return NextResponse.json({ error: "Class not found." }, { status: 404 });
+  }
 
   const header = toCsvRow(["Student ID", "Name", "Level", "Criterion Average (0-8)"]);
-  const lines = rows.map((row) =>
-    toCsvRow([row.id, row.fullName, row.gradeLevel, Number(row.avgScore).toFixed(2)])
+  const lines = detail.atRisk.map((row) =>
+    toCsvRow([row.id, row.fullName, row.gradeLevel, row.averageScore.toFixed(2)])
   );
 
   const csv = [header, ...lines].join("\n");
-  const filename = `class_${classRecord.name.replace(/\s+/g, "_")}_${term.name}.csv`;
+  const filename = `class_${detail.entity.classLabel.replace(/\s+/g, "_")}_${term.name}.csv`;
 
   return new NextResponse(csv, {
     headers: {

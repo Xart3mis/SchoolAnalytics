@@ -20,7 +20,7 @@ export type ClassListRow = {
   studentCount: number;
 };
 
-function riskLevel(score: number) {
+function riskLevel(score: number): "High" | "Medium" | "Low" {
   if (score <= RISK_THRESHOLDS.high) return "High";
   if (score <= RISK_THRESHOLDS.medium) return "Medium";
   return "Low";

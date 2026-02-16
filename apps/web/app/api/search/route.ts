@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { getClassEntityList } from "@/lib/analytics/class-entities";
 import { getSessionFromCookies } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 
@@ -33,8 +34,9 @@ export async function GET(request: Request) {
 
   const rawLimit = Number(searchParams.get("limit") ?? "6");
   const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 10) : 6;
+  const termId = searchParams.get("term") ?? undefined;
 
-  const [students, classes] = await Promise.all([
+  const [students, sectionClasses, entityClasses] = await Promise.all([
     prisma.student.findMany({
       where: {
         OR: [
@@ -62,7 +64,23 @@ export async function GET(request: Request) {
       },
       orderBy: [{ name: "asc" }],
     }),
+    termId ? getClassEntityList(termId, { query }) : Promise.resolve([]),
   ]);
+
+  const classes =
+    termId && entityClasses.length > 0
+      ? entityClasses.slice(0, limit).map((entity) => ({
+          id: entity.id,
+          name: entity.classLabel,
+          gradeLevel: entity.gradeLevel ? String(entity.gradeLevel) : null,
+          academicYear: entity.academicYear,
+        }))
+      : sectionClasses.map((cls) => ({
+          id: cls.id,
+          name: cls.name,
+          gradeLevel: cls.course?.gradeLevel?.name ?? null,
+          academicYear: cls.academicYear?.name ?? null,
+        }));
 
   return NextResponse.json({
     students: students.map((student) => ({
@@ -70,11 +88,6 @@ export async function GET(request: Request) {
       name: formatStudentName(student),
       email: student.user.email,
     })),
-    classes: classes.map((cls) => ({
-      id: cls.id,
-      name: cls.name,
-      gradeLevel: cls.course?.gradeLevel?.name ?? null,
-      academicYear: cls.academicYear?.name ?? null,
-    })),
+    classes,
   } satisfies SearchResponse);
 }

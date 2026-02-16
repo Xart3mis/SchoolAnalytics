@@ -1,11 +1,11 @@
 "use client";
 
-import { ChevronDown, Command, LogOut, Menu, Moon, Search, Sun } from "lucide-react";
+import { Command as CommandMenu } from "cmdk";
+import { ChevronDown, Command as CommandIcon, LogOut, Menu, Moon, Search, Sun } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { ThemedSelect } from "@/components/ui/themed-select";
 import { useUiStore } from "@/hooks/use-ui-store";
 import { useTheme } from "next-themes";
@@ -36,6 +36,7 @@ export function AppHeader() {
   const [open, setOpen] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(false);
   const searchRef = React.useRef<HTMLDivElement | null>(null);
+  const searchInputRef = React.useRef<HTMLInputElement | null>(null);
   const menuRef = React.useRef<HTMLDivElement | null>(null);
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [academicYears, setAcademicYears] = React.useState<AcademicYearOption[]>([]);
@@ -76,7 +77,7 @@ export function AppHeader() {
     academicYears[0];
   const selectedTerm = selectedTermId
     ? selectedYear?.terms.find((term) => term.id === selectedTermId)
-    : selectedYear?.terms.at(-1) ?? undefined;
+    : selectedYear?.terms[selectedYear.terms.length - 1] ?? undefined;
   const selectedYearLabel = selectedYear ? `${selectedYear.name}` : "Select year";
   const selectedTermLabel = selectedTerm?.name ?? "T-";
   const yearTermQuery = new URLSearchParams();
@@ -86,6 +87,15 @@ export function AppHeader() {
   const yearTermSuffix = yearTermQueryString ? `?${yearTermQueryString}` : "";
 
   React.useEffect(() => {
+    function handleShortcut(event: KeyboardEvent) {
+      if (event.key.toLowerCase() !== "k") return;
+      if (!(event.metaKey || event.ctrlKey)) return;
+      event.preventDefault();
+      setOpen(true);
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+    }
+
     function handleClick(event: MouseEvent) {
       const target = event.target as Node;
       if (searchRef.current && !searchRef.current.contains(target)) {
@@ -96,15 +106,18 @@ export function AppHeader() {
       }
     }
 
+    document.addEventListener("keydown", handleShortcut);
     document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
+    return () => {
+      document.removeEventListener("keydown", handleShortcut);
+      document.removeEventListener("mousedown", handleClick);
+    };
   }, []);
 
   React.useEffect(() => {
     if (trimmedQuery.length < 2) {
       setResults({ students: [], classes: [] });
       setIsLoading(false);
-      setOpen(false);
       return;
     }
 
@@ -112,7 +125,15 @@ export function AppHeader() {
     const controller = new AbortController();
     const timeout = window.setTimeout(async () => {
       try {
-        const response = await fetch(`/api/search?q=${encodeURIComponent(trimmedQuery)}`, {
+        const searchQuery = new URLSearchParams();
+        searchQuery.set("q", trimmedQuery);
+        if (selectedTerm?.id) {
+          searchQuery.set("term", selectedTerm.id);
+        }
+        if (selectedYear?.id) {
+          searchQuery.set("year", selectedYear.id);
+        }
+        const response = await fetch(`/api/search?${searchQuery.toString()}`, {
           signal: controller.signal,
         });
         if (!response.ok) {
@@ -136,7 +157,7 @@ export function AppHeader() {
       controller.abort();
       window.clearTimeout(timeout);
     };
-  }, [trimmedQuery]);
+  }, [selectedTerm?.id, selectedYear?.id, trimmedQuery]);
 
   React.useEffect(() => {
     const urlQuery = searchParams.get("q") ?? "";
@@ -205,93 +226,90 @@ export function AppHeader() {
       </div>
       <div className="flex items-center justify-center sm:px-2">
         <div ref={searchRef} className="relative w-full max-w-none sm:max-w-xl">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--text-muted)]" />
-          <Input
-            placeholder="Search students or classes..."
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onFocus={() => {
-              if (trimmedQuery.length >= 2) setOpen(true);
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Escape") {
-                setOpen(false);
-              }
-              if (event.key === "Enter" && trimmedQuery.length > 0) {
-                event.preventDefault();
-                const params = new URLSearchParams();
-                params.set("q", trimmedQuery);
-                if (selectedYear?.id) {
-                  params.set("year", selectedYear.id);
+          <CommandMenu
+            shouldFilter={false}
+            className="rounded-md border border-[color:var(--border)] bg-[color:var(--surface)]"
+          >
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[color:var(--text-muted)]" />
+            <CommandMenu.Input
+              ref={searchInputRef}
+              placeholder="Search students or classes..."
+              value={query}
+              onValueChange={setQuery}
+              onFocus={() => setOpen(true)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  setOpen(false);
                 }
-                if (selectedTerm?.id) {
-                  params.set("term", selectedTerm.id);
-                }
-                router.push(`/students?${params.toString()}`);
-                setOpen(false);
-              }
-            }}
-            className="pl-10 bg-[color:var(--surface)] text-sm focus-visible:ring-[color:var(--accent)]"
-          />
-          <div className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 items-center gap-1 text-xs text-[color:var(--text-muted)] md:flex">
-            <Command className="h-3 w-3" />K
-          </div>
-          {open ? (
-            <div className="absolute left-0 right-0 top-full z-20 mt-2 rounded-xl border border-[color:var(--border)] bg-[color:var(--surface)] p-2 shadow-[0_18px_40px_-28px_rgba(10,20,40,0.55)]">
-              {isLoading ? (
-                <div className="px-3 py-2 text-xs text-[color:var(--text-muted)]">Searching...</div>
-              ) : totalResults === 0 ? (
-                <div className="px-3 py-2 text-xs text-[color:var(--text-muted)]">
-                  No matches for &quot;{trimmedQuery}&quot;.
-                </div>
-              ) : (
-                <div className="flex flex-col gap-3">
-                  {results.students.length ? (
-                    <div>
+              }}
+              className="h-10 w-full rounded-md bg-transparent pl-10 pr-12 text-sm text-[color:var(--text)] outline-none placeholder:text-[color:var(--text-muted)] focus-visible:ring-2 focus-visible:ring-[color:var(--accent)]"
+            />
+            {open ? (
+              <CommandMenu.List className="absolute left-0 right-0 top-full z-20 mt-2 max-h-96 overflow-auto rounded-xl border border-[color:var(--border)] bg-[color:var(--surface)] p-2 shadow-[0_18px_40px_-28px_rgba(10,20,40,0.55)]">
+                {isLoading ? (
+                  <div className="px-3 py-2 text-xs text-[color:var(--text-muted)]">Searching...</div>
+                ) : trimmedQuery.length < 2 ? (
+                  <div className="px-3 py-2 text-xs text-[color:var(--text-muted)]">
+                    Type at least 2 characters to search.
+                  </div>
+                ) : totalResults === 0 ? (
+                  <CommandMenu.Empty className="px-3 py-2 text-xs text-[color:var(--text-muted)]">
+                    No matches for &quot;{trimmedQuery}&quot;.
+                  </CommandMenu.Empty>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    <CommandMenu.Group heading="Students">
                       <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--text-muted)]">
                         Students
                       </div>
                       <div className="flex flex-col">
                         {results.students.map((student) => (
-                          <Link
+                          <CommandMenu.Item
                             key={student.id}
-                            href={`/students/${student.id}${yearTermSuffix}`}
-                            onClick={() => setOpen(false)}
-                            className="rounded-lg px-2 py-2 text-sm text-[color:var(--text)] transition-colors hover:bg-[color:var(--surface-strong)]"
+                            value={`${student.name} ${student.email}`}
+                            onSelect={() => {
+                              router.push(`/students/${student.id}${yearTermSuffix}`);
+                              setOpen(false);
+                            }}
+                            className="rounded-lg px-2 py-2 text-sm text-[color:var(--text)] transition-colors data-[selected=true]:bg-[color:var(--surface-strong)]"
                           >
                             <div className="font-medium">{student.name}</div>
                             <div className="text-xs text-[color:var(--text-muted)]">{student.email}</div>
-                          </Link>
+                          </CommandMenu.Item>
                         ))}
                       </div>
-                    </div>
-                  ) : null}
-                  {results.classes.length ? (
-                    <div>
+                    </CommandMenu.Group>
+                    <CommandMenu.Group heading="Classes">
                       <div className="px-2 pb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--text-muted)]">
                         Classes
                       </div>
                       <div className="flex flex-col">
                         {results.classes.map((cls) => (
-                          <Link
+                          <CommandMenu.Item
                             key={cls.id}
-                            href={`/classes/${cls.id}${yearTermSuffix}`}
-                            onClick={() => setOpen(false)}
-                            className="rounded-lg px-2 py-2 text-sm text-[color:var(--text)] transition-colors hover:bg-[color:var(--surface-strong)]"
+                            value={`${cls.name} ${cls.gradeLevel ?? ""} ${cls.academicYear ?? ""}`}
+                            onSelect={() => {
+                              router.push(`/classes/${cls.id}${yearTermSuffix}`);
+                              setOpen(false);
+                            }}
+                            className="rounded-lg px-2 py-2 text-sm text-[color:var(--text)] transition-colors data-[selected=true]:bg-[color:var(--surface-strong)]"
                           >
                             <div className="font-medium">{cls.name}</div>
                             <div className="text-xs text-[color:var(--text-muted)]">
                               {[cls.gradeLevel, cls.academicYear].filter(Boolean).join(" • ")}
                             </div>
-                          </Link>
+                          </CommandMenu.Item>
                         ))}
                       </div>
-                    </div>
-                  ) : null}
-                </div>
-              )}
-            </div>
-          ) : null}
+                    </CommandMenu.Group>
+                  </div>
+                )}
+              </CommandMenu.List>
+            ) : null}
+          </CommandMenu>
+          <div className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 items-center gap-1 text-xs text-[color:var(--text-muted)] md:flex">
+            <CommandIcon className="h-3 w-3" />K
+          </div>
         </div>
       </div>
       <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end">

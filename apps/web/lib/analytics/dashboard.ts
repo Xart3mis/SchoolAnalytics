@@ -456,7 +456,7 @@ export async function getDashboardData({
       .map((row) => ({
         id: row.studentId as string,
         name: row.fullName as string,
-        gradeLevel: `Level ${row.gradeLevel}`,
+        gradeLevel: `MYP ${row.gradeLevel}`,
         averageScore: Number(row.avgScore),
         riskLevel: riskLevel(Number(row.avgScore)),
       })),

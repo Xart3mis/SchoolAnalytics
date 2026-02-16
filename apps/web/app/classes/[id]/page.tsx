@@ -9,54 +9,39 @@ import { CriteriaComparisonBars } from "@/features/analytics/components/criteria
 import { SubjectTrendLines } from "@/features/analytics/components/subject-trend-lines";
 import { TermTrendLine } from "@/features/analytics/components/term-trend-line";
 import { StatTiles } from "@/features/analytics/components/stat-tiles";
-import {
-  getClassOverallStat,
-  getClassCriteriaSummary,
-  getClassSubjectStats,
-} from "@/lib/analytics/aggregates";
-import { getClassAtRiskList } from "@/lib/analytics/risk";
-import { getClassAssignmentTrend, getClassSubjectTrends } from "@/lib/analytics/trends";
-import { getActiveTerm } from "@/lib/analytics/terms";
+import { getClassEntityDetail } from "@/lib/analytics/class-entities";
+import { resolveSelectedTerm } from "@/lib/analytics/terms";
 import { requireSession } from "@/lib/auth/guards";
-import { prisma } from "@/lib/prisma";
 
 interface ClassDetailPageProps {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ term?: string; year?: string }>;
 }
 
-export default async function ClassDetailPage({ params }: ClassDetailPageProps) {
+export default async function ClassDetailPage({ params, searchParams }: ClassDetailPageProps) {
   await requireSession();
   const { id } = await params;
-  const cls = await prisma.classSection.findUnique({
-    where: { id },
-    include: {
-      course: { include: { gradeLevel: true } },
-      academicTerm: { include: { academicYear: true } },
-    },
+  const resolvedSearchParams = await searchParams;
+  const yearId = resolvedSearchParams?.year;
+  const term = await resolveSelectedTerm({
+    yearId,
+    termId: resolvedSearchParams?.term,
   });
-  if (!cls) {
-    notFound();
-  }
-
-  const term = cls.academicTerm ?? (await getActiveTerm());
   if (!term) {
     return <div className="text-sm text-[color:var(--text-muted)]">No term data yet.</div>;
   }
 
-  const [subjectStats, overall, criteriaSummary, enrollmentCount, trend, subjectTrends, atRisk] =
-    await Promise.all([
-      getClassSubjectStats(cls.id, term.id),
-      getClassOverallStat(cls.id, term.id),
-      getClassCriteriaSummary(cls.id, term.id),
-      prisma.enrollment.count({ where: { classSectionId: cls.id, role: "STUDENT" } }),
-      getClassAssignmentTrend(cls.id, term.academicYearId, term.id),
-      getClassSubjectTrends(cls.courseId, term.academicYearId),
-      getClassAtRiskList(cls.id, term.id, 15),
-    ]);
+  const detail = await getClassEntityDetail({
+    routeId: id,
+    termId: term.id,
+    academicYearId: term.academicYearId,
+    atRiskLimit: 15,
+  });
+  if (!detail) {
+    notFound();
+  }
 
-  const gradeLabel = cls.course.gradeLevel?.name
-    ? `Level ${cls.course.gradeLevel.name}`
-    : "Level N/A";
+  const gradeLabel = detail.entity.gradeLevel ? `Level ${detail.entity.gradeLevel}` : "Level N/A";
 
   return (
     <div className="flex flex-col gap-6">
@@ -69,7 +54,7 @@ export default async function ClassDetailPage({ params }: ClassDetailPageProps) 
           </CardHeader>
           <CardContent>
             <div className="text-[clamp(1.4rem,2.4vw,2.1rem)] font-semibold text-[color:var(--text)]">
-              {cls.name}
+              {detail.entity.classLabel}
             </div>
             <div className="text-xs text-[color:var(--text-muted)]">{gradeLabel}</div>
           </CardContent>
@@ -82,7 +67,7 @@ export default async function ClassDetailPage({ params }: ClassDetailPageProps) 
           </CardHeader>
           <CardContent>
             <div className="text-[clamp(1.6rem,3vw,2.6rem)] font-semibold text-[color:var(--text)]">
-              {enrollmentCount.toLocaleString()}
+              {detail.entity.studentCount.toLocaleString()}
             </div>
             <div className="text-xs text-[color:var(--text-muted)]">Enrolled</div>
           </CardContent>
@@ -95,7 +80,7 @@ export default async function ClassDetailPage({ params }: ClassDetailPageProps) 
           </CardHeader>
           <CardContent>
             <div className="text-[clamp(1.6rem,3vw,2.6rem)] font-semibold text-[color:var(--text)]">
-              {overall.averageScore.toFixed(2)}
+              {detail.overall.averageScore.toFixed(2)}
             </div>
           </CardContent>
         </Card>
@@ -107,7 +92,7 @@ export default async function ClassDetailPage({ params }: ClassDetailPageProps) 
           </CardHeader>
           <CardContent>
             <div className="text-[clamp(1.4rem,2.4vw,2.1rem)] font-semibold text-[color:var(--text)]">
-              {overall.riskLevel}
+              {detail.overall.riskLevel}
             </div>
             <div className="text-xs text-[color:var(--text-muted)]">
               {term.academicYear.name} {term.name}
@@ -121,31 +106,31 @@ export default async function ClassDetailPage({ params }: ClassDetailPageProps) 
           {
             id: "criterion-a",
             label: "Criterion A",
-            value: criteriaSummary.criterionA.toFixed(1),
+            value: detail.criteriaSummary.criterionA.toFixed(1),
             helper: "Avg across students",
           },
           {
             id: "criterion-b",
             label: "Criterion B",
-            value: criteriaSummary.criterionB.toFixed(1),
+            value: detail.criteriaSummary.criterionB.toFixed(1),
             helper: "Avg across students",
           },
           {
             id: "criterion-c",
             label: "Criterion C",
-            value: criteriaSummary.criterionC.toFixed(1),
+            value: detail.criteriaSummary.criterionC.toFixed(1),
             helper: "Avg across students",
           },
           {
             id: "criterion-d",
             label: "Criterion D",
-            value: criteriaSummary.criterionD.toFixed(1),
+            value: detail.criteriaSummary.criterionD.toFixed(1),
             helper: "Avg across students",
           },
         ]}
       />
 
-      <SubjectStatsTable title="Class Subject Performance" data={subjectStats} />
+      <SubjectStatsTable title="Class Subject Performance" data={detail.subjectStats} />
 
       <section className="stagger grid gap-3 sm:gap-4 xl:grid-cols-[2fr_1fr]">
         <ChartCard
@@ -157,7 +142,7 @@ export default async function ClassDetailPage({ params }: ClassDetailPageProps) 
             term: term.name,
             chartType: "Assignment Trends",
           }}
-          exportRows={trend.map((point) => ({
+          exportRows={detail.assignmentTrend.map((point) => ({
             pointType: point.kind,
             label: point.fullLabel,
             criterionA: point.criterionA ?? "",
@@ -166,7 +151,7 @@ export default async function ClassDetailPage({ params }: ClassDetailPageProps) 
             criterionD: point.criterionD ?? "",
           }))}
         >
-          <TermTrendLine data={trend} />
+          <TermTrendLine data={detail.assignmentTrend} />
         </ChartCard>
         <ChartCard
           title="Criterion Profile"
@@ -179,14 +164,14 @@ export default async function ClassDetailPage({ params }: ClassDetailPageProps) 
           }}
           exportRows={[
             {
-              criterionA: criteriaSummary.criterionA,
-              criterionB: criteriaSummary.criterionB,
-              criterionC: criteriaSummary.criterionC,
-              criterionD: criteriaSummary.criterionD,
+              criterionA: detail.criteriaSummary.criterionA,
+              criterionB: detail.criteriaSummary.criterionB,
+              criterionC: detail.criteriaSummary.criterionC,
+              criterionD: detail.criteriaSummary.criterionD,
             },
           ]}
         >
-          <CriteriaComparisonBars values={criteriaSummary} />
+          <CriteriaComparisonBars values={detail.criteriaSummary} />
         </ChartCard>
       </section>
 
@@ -200,7 +185,7 @@ export default async function ClassDetailPage({ params }: ClassDetailPageProps) 
             term: term.name,
             chartType: "Criterion Trends",
           }}
-          exportRows={subjectTrends.map((point) => ({
+          exportRows={detail.criterionTrends.map((point) => ({
             term: point.label,
             criterionA: point.criterionA,
             criterionB: point.criterionB,
@@ -208,19 +193,19 @@ export default async function ClassDetailPage({ params }: ClassDetailPageProps) 
             criterionD: point.criterionD,
           }))}
         >
-          <SubjectTrendLines data={subjectTrends} />
+          <SubjectTrendLines data={detail.criterionTrends} />
         </ChartCard>
       </div>
 
       <AtRiskMiniTable
         title="At-Risk Students"
-        data={atRisk}
-        exportHref={`/api/reports/classes/${cls.id}`}
+        data={detail.atRisk}
+        exportHref={`/api/reports/classes/${detail.entity.id}?year=${term.academicYearId}&term=${term.id}`}
         yearId={term.academicYearId}
         termId={term.id}
       />
 
-      <AdminNotes pageKey={`class:${cls.id}`} />
+      <AdminNotes pageKey={`class:${detail.entity.id}`} />
     </div>
   );
 }

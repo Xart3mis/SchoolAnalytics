@@ -9,7 +9,7 @@ import { useUiStore } from "@/hooks/use-ui-store";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isLogin = pathname === "/login";
+  const isAuthRoute = pathname === "/login" || pathname.startsWith("/auth/");
   const { sidebarOpen, setSidebarOpen } = useUiStore();
 
   React.useEffect(() => {
@@ -19,7 +19,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
   }, [setSidebarOpen]);
 
-  if (isLogin) {
+  if (isAuthRoute) {
     return <div className="min-h-screen">{children}</div>;
   }
 
