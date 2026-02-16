@@ -78,10 +78,13 @@ services:
       AUTH_SESSION_TTL_SECONDS: ${AUTH_SESSION_TTL_SECONDS:-604800}
       NEXT_TELEMETRY_DISABLED: 1
     depends_on:
+      postgres:
+        condition: service_healthy
       pgbouncer:
         condition: service_healthy
       redis:
         condition: service_healthy
+    command: ["sh", "-lc", "npm run build --workspace @school-analytics/web && if [ -f apps/web/.next/standalone/server.js ]; then [ -d apps/web/public ] && cp -r apps/web/public apps/web/.next/standalone/ || true; mkdir -p apps/web/.next/standalone/.next; [ -d apps/web/.next/static ] && cp -r apps/web/.next/static apps/web/.next/standalone/.next/ || true; exec node apps/web/.next/standalone/server.js; elif [ -f apps/web/.next/standalone/apps/web/server.js ]; then [ -d apps/web/public ] && cp -r apps/web/public apps/web/.next/standalone/apps/web/ || true; mkdir -p apps/web/.next/standalone/apps/web/.next; [ -d apps/web/.next/static ] && cp -r apps/web/.next/static apps/web/.next/standalone/apps/web/.next/ || true; exec node apps/web/.next/standalone/apps/web/server.js; else echo 'standalone server.js not found' >&2; exit 1; fi"]
     ports:
       - "${WEB_PORT:-3000}:3000"
     networks:

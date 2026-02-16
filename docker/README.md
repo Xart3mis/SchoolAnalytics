@@ -29,7 +29,8 @@ npm run docker:prod
 ```
 
 What runs in production mode:
-- `web` in `NODE_ENV=production` with built Next.js output
+- `web` in `NODE_ENV=production` (build runs at container startup after healthy DB/pool/redis dependencies)
+- `web` runs the standalone server entrypoint (`node .next/standalone/.../server.js`) and copies `public` + `.next/static` into standalone output before boot
 - `worker` and `scheduler` in production mode
 - shared `postgres`, `redis`, and `pgbouncer`
 

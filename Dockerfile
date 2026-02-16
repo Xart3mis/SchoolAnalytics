@@ -29,14 +29,16 @@ FROM deps AS dev-scheduler
 COPY . .
 CMD ["npm", "run", "dev", "--workspace", "@school-analytics/scheduler"]
 
-FROM node:22-alpine AS web
-WORKDIR /app
+FROM deps AS web
+WORKDIR /workspace
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-COPY --from=build-web /workspace/apps/web/.next/standalone ./
-COPY --from=build-web /workspace/apps/web/.next/static ./apps/web/.next/static
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3000
+COPY . .
+RUN npm run prisma:generate
 EXPOSE 3000
-CMD ["node", "apps/web/server.js"]
+CMD ["sh", "-lc", "npm run build --workspace @school-analytics/web && if [ -f apps/web/.next/standalone/server.js ]; then [ -d apps/web/public ] && cp -r apps/web/public apps/web/.next/standalone/ || true; mkdir -p apps/web/.next/standalone/.next; [ -d apps/web/.next/static ] && cp -r apps/web/.next/static apps/web/.next/standalone/.next/ || true; exec node apps/web/.next/standalone/server.js; elif [ -f apps/web/.next/standalone/apps/web/server.js ]; then [ -d apps/web/public ] && cp -r apps/web/public apps/web/.next/standalone/apps/web/ || true; mkdir -p apps/web/.next/standalone/apps/web/.next; [ -d apps/web/.next/static ] && cp -r apps/web/.next/static apps/web/.next/standalone/apps/web/.next/ || true; exec node apps/web/.next/standalone/apps/web/server.js; else echo 'standalone server.js not found' >&2; exit 1; fi"]
 
 FROM deps AS runtime-prep
 COPY . .
