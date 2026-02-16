@@ -71,6 +71,12 @@ enum MagicLinkPurpose {
   LOGIN
 }
 
+enum LoginLinkRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 enum AuthAuditEventType {
   MAGIC_LINK_REQUESTED
   MAGIC_LINK_CONSUMED
@@ -97,10 +103,12 @@ model User {
   staffProfile   Staff?
 
   // Existing schema compatibility
-  sessions        Session[]
-  adminNotes      AdminNote[]
-  magicLinks      MagicLink[]
-  authAuditEvents AuthAuditEvent[]
+  sessions                   Session[]
+  adminNotes                 AdminNote[]
+  magicLinks                 MagicLink[]
+  loginLinkRequestsRequested LoginLinkRequest[] @relation("LoginLinkRequestRequester")
+  loginLinkRequestsReviewed  LoginLinkRequest[] @relation("LoginLinkRequestReviewer")
+  authAuditEvents            AuthAuditEvent[]
 }
 
 model Session {
@@ -127,10 +135,29 @@ model MagicLink {
   requestedUserAgent String?
   consumedByIp      String?
   consumedUserAgent String?
-  createdAt         DateTime         @default(now())
-  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt         DateTime          @default(now())
+  user              User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  loginLinkRequest  LoginLinkRequest?
 
   @@index([userId, purpose, expiresAt])
+}
+
+model LoginLinkRequest {
+  id             String                 @id @default(cuid())
+  requesterId    String
+  status         LoginLinkRequestStatus @default(PENDING)
+  reviewerUserId String?
+  reviewedAt     DateTime?
+  reviewReason   String?
+  magicLinkId    String?                @unique
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  requester      User                   @relation("LoginLinkRequestRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  reviewer       User?                  @relation("LoginLinkRequestReviewer", fields: [reviewerUserId], references: [id], onDelete: SetNull)
+  magicLink      MagicLink?             @relation(fields: [magicLinkId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([requesterId, status, createdAt])
 }
 
 model AuthAuditEvent {
