@@ -33,7 +33,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           className="fixed inset-0 z-20 bg-black/40 backdrop-blur-[1px] md:hidden"
         />
       ) : null}
-      <AppSidebar />
+      <React.Suspense
+        fallback={
+          <aside className="hidden h-screen w-20 border-r border-[color:var(--border)] bg-[color:var(--surface)] md:block lg:w-64" />
+        }
+      >
+        <AppSidebar />
+      </React.Suspense>
       <div className="relative z-10 flex flex-1 flex-col overflow-hidden">
         <React.Suspense
           fallback={
