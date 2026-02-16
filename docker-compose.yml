@@ -15,20 +15,26 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+    networks:
+      - infra
 
   redis:
     image: redis:7-alpine
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
-      - redis_data:/data
+      - redis_app_data:/data
     ports:
       - "${REDIS_PORT:-6379}:6379"
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 20
+    networks:
+      - backend
 
   pgbouncer:
     build:
@@ -55,6 +61,9 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+    networks:
+      - infra
+      - backend
 
   web:
     build:
@@ -75,6 +84,8 @@ services:
         condition: service_healthy
     ports:
       - "${WEB_PORT:-3000}:3000"
+    networks:
+      - backend
 
   worker:
     build:
@@ -92,6 +103,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - backend
 
   scheduler:
     build:
@@ -111,6 +124,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - backend
 
   migrate:
     build:
@@ -124,6 +139,8 @@ services:
       postgres:
         condition: service_healthy
     command: ["npm", "run", "prisma:migrate", "--workspace", "@school-analytics/db"]
+    networks:
+      - infra
 
   seed:
     build:
@@ -139,7 +156,15 @@ services:
       postgres:
         condition: service_healthy
     command: ["npm", "run", "db:seed", "--workspace", "@school-analytics/db"]
+    networks:
+      - infra 
 
 volumes:
   postgres_data:
-  redis_data:
+    driver: local
+  redis_app_data:
+    driver: local
+
+networks:
+  backend:
+  infra:
