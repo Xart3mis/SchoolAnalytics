@@ -5,7 +5,6 @@ import {
   CartesianGrid,
   Line,
   LineChart,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
@@ -15,6 +14,7 @@ import { CRITERION_SCORE_SCALE } from "@/lib/analytics/config";
 import type { AssignmentTrendPoint } from "@/lib/analytics/trends";
 import { chartTooltipProps } from "@/features/analytics/components/chart-tooltip";
 import { ThemedSelect } from "@/components/ui/themed-select";
+import { StableResponsiveContainer } from "@/features/analytics/components/stable-responsive-container";
 
 const SERIES = [
   { key: "criterionA", label: "Criterion A", color: "var(--chart-1)" },
@@ -114,9 +114,8 @@ export function TermTrendLine({ data }: TermTrendLineProps) {
           </button>
         ))}
       </div>
-      <div className="h-72 w-full">
-        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-          <LineChart data={filteredData} margin={{ top: 8, right: 16, left: 0, bottom: 40 }}>
+      <StableResponsiveContainer className="h-72 w-full">
+        <LineChart data={filteredData} margin={{ top: 8, right: 16, left: 0, bottom: 40 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.6} />
           <XAxis
             dataKey="id"
@@ -157,9 +156,8 @@ export function TermTrendLine({ data }: TermTrendLineProps) {
               dot={false}
             />
           ))}
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
+        </LineChart>
+      </StableResponsiveContainer>
     </div>
   );
 }
