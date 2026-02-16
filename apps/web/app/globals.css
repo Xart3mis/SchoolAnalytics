@@ -51,6 +51,14 @@
 }
 
 body {
+  font-family:
+    "Space Grotesk",
+    "Avenir Next",
+    "Segoe UI",
+    "Inter",
+    "Helvetica Neue",
+    Arial,
+    sans-serif;
   background-color: var(--bg);
   color: var(--text);
   @apply antialiased;
