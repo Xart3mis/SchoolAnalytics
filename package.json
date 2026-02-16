@@ -17,6 +17,17 @@
     "lint:fix": "npm run lint:fix --workspaces --if-present",
     "prisma:generate": "npm run prisma:generate --workspace @school-analytics/db",
     "prisma:migrate": "npm run prisma:migrate --workspace @school-analytics/db",
-    "db:seed": "npm run db:seed --workspace @school-analytics/db"
+    "db:seed": "npm run db:seed --workspace @school-analytics/db",
+    "docker:dev": "./scripts/docker-dev-up.sh",
+    "docker:prod": "./scripts/docker-prod-up.sh",
+    "docker:migrate": "./scripts/docker-migrate.sh",
+    "docker:seed": "./scripts/docker-seed.sh",
+    "docker:down": "./scripts/docker-down.sh",
+    "docker:logs": "./scripts/docker-logs.sh",
+    "docker:watch": "./scripts/docker-watch.sh",
+    "docker:infisical:up": "./scripts/docker-infisical-up.sh",
+    "docker:infisical:runtime": "./scripts/docker-infisical-runtime-up.sh",
+    "docker:infisical:migrate": "./scripts/docker-infisical-migrate.sh",
+    "docker:infisical:seed": "./scripts/docker-infisical-seed.sh"
   }
 }
