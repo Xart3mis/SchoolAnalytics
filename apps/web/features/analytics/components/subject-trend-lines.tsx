@@ -6,7 +6,6 @@ import {
   Legend,
   Line,
   LineChart,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
@@ -15,6 +14,7 @@ import {
 import { CRITERION_SCORE_SCALE } from "@/lib/analytics/config";
 import type { CriterionTrendPoint } from "@/lib/analytics/trends";
 import { chartTooltipProps } from "@/features/analytics/components/chart-tooltip";
+import { StableResponsiveContainer } from "@/features/analytics/components/stable-responsive-container";
 
 const SERIES = [
   { key: "criterionA", label: "Criterion A", color: "var(--chart-1)" },
@@ -55,9 +55,8 @@ export function SubjectTrendLines({ data }: SubjectTrendLinesProps) {
           </button>
         ))}
       </div>
-      <div className="h-72 w-full">
-        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-          <LineChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
+      <StableResponsiveContainer className="h-72 w-full">
+        <LineChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.6} />
           <XAxis
             dataKey="label"
@@ -89,9 +88,8 @@ export function SubjectTrendLines({ data }: SubjectTrendLinesProps) {
               dot={false}
             />
           ))}
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
+        </LineChart>
+      </StableResponsiveContainer>
     </div>
   );
 }

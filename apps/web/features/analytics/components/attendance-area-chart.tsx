@@ -6,7 +6,6 @@ import {
   Legend,
   Line,
   LineChart,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
@@ -15,6 +14,7 @@ import {
 import { CRITERION_SCORE_SCALE } from "@/lib/analytics/config";
 import type { CriterionTrendPoint } from "@/lib/analytics/dashboard";
 import { chartTooltipProps } from "@/features/analytics/components/chart-tooltip";
+import { StableResponsiveContainer } from "@/features/analytics/components/stable-responsive-container";
 
 interface PerformanceAreaChartProps {
   data: CriterionTrendPoint[];
@@ -29,43 +29,41 @@ const SERIES = [
 
 function PerformanceAreaChartComponent({ data }: PerformanceAreaChartProps) {
   return (
-    <div className="h-64 w-full">
-      <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-        <LineChart data={data} margin={{ top: 12, right: 16, left: 0, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.6} />
-          <XAxis
-            dataKey="label"
-            stroke="var(--text-muted)"
-            tick={{ fill: "var(--text-muted)", fontSize: 11 }}
-            tickLine={false}
-            axisLine={false}
+    <StableResponsiveContainer className="h-64 w-full">
+      <LineChart data={data} margin={{ top: 12, right: 16, left: 0, bottom: 0 }}>
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" strokeOpacity={0.6} />
+        <XAxis
+          dataKey="label"
+          stroke="var(--text-muted)"
+          tick={{ fill: "var(--text-muted)", fontSize: 11 }}
+          tickLine={false}
+          axisLine={false}
+        />
+        <YAxis
+          domain={[CRITERION_SCORE_SCALE.min, CRITERION_SCORE_SCALE.max]}
+          stroke="var(--text-muted)"
+          tick={{ fill: "var(--text-muted)", fontSize: 11 }}
+          tickLine={false}
+          axisLine={false}
+        />
+        <Tooltip
+          {...chartTooltipProps}
+          formatter={(value?: number, name?: string) => [`${(value ?? 0).toFixed(2)}`, name ?? "Criterion"]}
+        />
+        <Legend />
+        {SERIES.map((series) => (
+          <Line
+            key={series.key}
+            type="monotone"
+            dataKey={series.key}
+            name={series.label}
+            stroke={series.color}
+            strokeWidth={2}
+            dot={false}
           />
-          <YAxis
-            domain={[CRITERION_SCORE_SCALE.min, CRITERION_SCORE_SCALE.max]}
-            stroke="var(--text-muted)"
-            tick={{ fill: "var(--text-muted)", fontSize: 11 }}
-            tickLine={false}
-            axisLine={false}
-          />
-          <Tooltip
-            {...chartTooltipProps}
-            formatter={(value?: number, name?: string) => [`${(value ?? 0).toFixed(2)}`, name ?? "Criterion"]}
-          />
-          <Legend />
-          {SERIES.map((series) => (
-            <Line
-              key={series.key}
-              type="monotone"
-              dataKey={series.key}
-              name={series.label}
-              stroke={series.color}
-              strokeWidth={2}
-              dot={false}
-            />
-          ))}
-        </LineChart>
-      </ResponsiveContainer>
-    </div>
+        ))}
+      </LineChart>
+    </StableResponsiveContainer>
   );
 }
 
