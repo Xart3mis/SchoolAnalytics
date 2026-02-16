@@ -6,6 +6,7 @@
   - Production-like:
     docker compose up -d --build
     npm run docker:prod
+    # web waits for healthy postgres/pgbouncer/redis and then runs next build before next start
 
   - Run migrations:
     docker compose --profile tools run --rm migrate
