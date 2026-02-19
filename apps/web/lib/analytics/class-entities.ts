@@ -723,6 +723,7 @@ export async function getClassEntityDetail(args: {
 
   const currentTermIndex = terms.findIndex((term) => term.id === args.termId);
   const previousTerm = currentTermIndex > 0 ? terms[currentTermIndex - 1] : null;
+  const currentTerm = termsById.get(args.termId);
   const assignmentTrend: AssignmentTrendPoint[] = [
     {
       id: `start-${args.termId}`,
@@ -753,9 +754,11 @@ export async function getClassEntityDetail(args: {
         kind: "assignment",
         subjectId: row.subjectId,
         subjectName: row.subjectName,
+        termId: args.termId,
+        termName: currentTerm?.name ?? undefined,
+        eventDate: (row.dueDate ?? row.createdAt).toISOString(),
       });
     });
-  const currentTerm = termsById.get(args.termId);
   if (currentTerm) {
     assignmentTrend.push({
       id: `term-${currentTerm.id}`,

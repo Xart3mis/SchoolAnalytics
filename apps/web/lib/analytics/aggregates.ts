@@ -19,6 +19,12 @@ export type OverallStat = {
   riskLevel: "High" | "Medium" | "Low";
 };
 
+export type PercentileCompositeStat = {
+  composite: number;
+  subjectCount: number;
+  trimmedSubjectCount: number;
+};
+
 export type CriteriaSummary = {
   criterionA: number;
   criterionB: number;
@@ -30,6 +36,11 @@ function riskLevel(score: number) {
   if (score <= RISK_THRESHOLDS.high) return "High";
   if (score <= RISK_THRESHOLDS.medium) return "Medium";
   return "Low";
+}
+
+function average(values: number[]) {
+  if (values.length === 0) return 0;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
 export async function getStudentSubjectStats(studentId: string, termId: string) {
@@ -323,6 +334,54 @@ export async function getStudentOverallStat(studentId: string, termId: string): 
 
   const score = Number(averageScore ?? 0);
   return { averageScore: score, riskLevel: riskLevel(score) };
+}
+
+export async function getStudentTrimmedPercentileComposite(
+  studentId: string,
+  termId: string
+): Promise<PercentileCompositeStat> {
+  const rows = await prisma.$queryRaw<
+    Array<{
+      subjectId: string;
+      percentile: number;
+    }>
+  >(Prisma.sql`
+    WITH student_course AS (
+      SELECT ge."studentId" AS "studentId",
+             cs."courseId" AS "courseId",
+             (
+               COALESCE(MAX(CASE WHEN gec."criterion" = 'A'::"MypCriterion" THEN gec."score" END), 0)::float
+               + COALESCE(MAX(CASE WHEN gec."criterion" = 'B'::"MypCriterion" THEN gec."score" END), 0)::float
+               + COALESCE(MAX(CASE WHEN gec."criterion" = 'C'::"MypCriterion" THEN gec."score" END), 0)::float
+               + COALESCE(MAX(CASE WHEN gec."criterion" = 'D'::"MypCriterion" THEN gec."score" END), 0)::float
+             ) / 4.0 AS "score"
+      FROM "GradeEntry" ge
+      JOIN "GradeEntryCriterion" gec ON gec."gradeEntryId" = ge."id"
+      JOIN "Assignment" a ON a."id" = ge."assignmentId"
+      JOIN "ClassSection" cs ON cs."id" = a."classSectionId"
+      WHERE cs."academicTermId" = ${termId}
+      GROUP BY ge."studentId", cs."courseId"
+    ),
+    subject_percentiles AS (
+      SELECT "studentId",
+             "courseId",
+             (CUME_DIST() OVER (PARTITION BY "courseId" ORDER BY "score")) * 100.0 AS "percentile"
+      FROM student_course
+    )
+    SELECT "courseId" AS "subjectId",
+           "percentile"::float AS "percentile"
+    FROM subject_percentiles
+    WHERE "studentId" = ${studentId}
+  `);
+
+  const percentiles = rows.map((row) => Number(row.percentile)).sort((left, right) => left - right);
+  const trimmed = percentiles.length > 2 ? percentiles.slice(1, -1) : percentiles;
+
+  return {
+    composite: average(trimmed),
+    subjectCount: percentiles.length,
+    trimmedSubjectCount: trimmed.length,
+  };
 }
 
 export async function getClassOverallStat(classSectionId: string, termId: string): Promise<OverallStat> {
