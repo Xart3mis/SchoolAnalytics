@@ -22,6 +22,9 @@ export type AssignmentTrendPoint = {
   kind: "assignment" | "term" | "start";
   subjectId?: string;
   subjectName?: string;
+  termId?: string;
+  termName?: string;
+  eventDate?: string;
 };
 
 async function getTerms(academicYearId: string) {
@@ -76,8 +79,8 @@ function buildAssignmentTrend(
   const points: AssignmentTrendPoint[] = [];
   points.push({
     id: `start-${terms[0].id}`,
-    label: options?.startLabel ?? "Origin",
-    fullLabel: options?.startFullLabel ?? options?.startLabel ?? "Origin",
+    label: options?.startLabel ?? "Start",
+    fullLabel: options?.startFullLabel ?? options?.startLabel ?? "Start",
     criterionA: null,
     criterionB: null,
     criterionC: null,
@@ -110,6 +113,9 @@ function buildAssignmentTrend(
         kind: "assignment",
         subjectId: assignment.subjectId,
         subjectName: assignment.subjectName,
+        termId: assignment.termId,
+        termName: assignment.termName,
+        eventDate: (assignment.dueDate ?? assignment.createdAt).toISOString(),
       });
       assignmentIndex += 1;
     }
@@ -123,6 +129,8 @@ function buildAssignmentTrend(
       criterionC: null,
       criterionD: null,
       kind: "term",
+      termId: term.id,
+      termName: term.name,
     });
   }
 
