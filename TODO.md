@@ -41,8 +41,9 @@
   idempotency race cases; run npm run lint --workspace @school-analytics/web; roll out by flag sequence (redis_cache → redis_rate_limit → redis_session_index → redis_locking →  redis_idempotency → redis_counters) with dashboards for hit-rate, deny-rate, lock contention, Redis error rate, and rollback criteria per flag.
 
 # DADA
+[ ] Modify subject performance table to only show 7 rows max, and enforce scrolling behaviour.
 [ ] implement "Bell Curve" visualizations for cohorts.
-[ ] Proper DB schema
-[ ] Toddle data ingestion pipeline
-[ ] IXL data ingestion pipeline
-[ ] Validate statistical validity of calculated analytics
+[ ] Proper DB schema.
+[ ] Toddle data ingestion pipeline.
+[ ] IXL data ingestion pipeline.
+[ ] Validate statistical validity of calculated analytics.
