@@ -38,5 +38,11 @@
   components/login-link-requests-panel.tsx; include DB fallback and reconciliation path (cache miss/drift triggers DB recount + counter reset) to keep UX real-time without sacrificing
   correctness.
   [ ] Harden with validation and staged rollout gates: add route-level tests for key isolation, stale-cache behavior, limiter fail-open semantics, session index invalidation, lock/
-  idempotency race cases; run npm run lint --workspace @school-analytics/web; roll out by flag sequence (redis_cache → redis_rate_limit → redis_session_index → redis_locking →
-  redis_idempotency → redis_counters) with dashboards for hit-rate, deny-rate, lock contention, Redis error rate, and rollback criteria per flag.
+  idempotency race cases; run npm run lint --workspace @school-analytics/web; roll out by flag sequence (redis_cache → redis_rate_limit → redis_session_index → redis_locking →  redis_idempotency → redis_counters) with dashboards for hit-rate, deny-rate, lock contention, Redis error rate, and rollback criteria per flag.
+
+# DADA
+[ ] implement "Bell Curve" visualizations for cohorts.
+[ ] Proper DB schema
+[ ] Toddle data ingestion pipeline
+[ ] IXL data ingestion pipeline
+[ ] Validate statistical validity of calculated analytics
