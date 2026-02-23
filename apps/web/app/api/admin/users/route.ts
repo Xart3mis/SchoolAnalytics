@@ -4,6 +4,7 @@ import { z } from "zod";
 import { ApiError, handleApiError } from "@/lib/api/errors";
 import { logAuthAuditEvent } from "@/lib/auth/audit";
 import { createMagicLink, getInviteLinkExpiry } from "@/lib/auth/magic";
+import { resolveTenantContextForSession } from "@/lib/auth/organization";
 import { getSessionFromCookies } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 
@@ -26,6 +27,10 @@ export async function GET(request: Request) {
     if (!session || session.user.role !== "ADMIN") {
       throw new ApiError("Unauthorized.", 403);
     }
+    const tenant = await resolveTenantContextForSession(session);
+    if (!tenant.activeOrganizationId) {
+      throw new ApiError("No school context available.", 409);
+    }
 
     const now = new Date();
     const links = await prisma.magicLink.findMany({
@@ -35,6 +40,7 @@ export async function GET(request: Request) {
         invalidatedAt: null,
         expiresAt: { gt: now },
         token: { not: null },
+        user: { organizationId: tenant.activeOrganizationId },
       },
       include: {
         user: {
@@ -49,6 +55,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       ok: true,
+      activeOrganization: tenant.activeOrganization,
       invites: links.map((link) => ({
         id: link.id,
         name: link.user.displayName ?? "",
@@ -68,6 +75,10 @@ export async function POST(request: Request) {
     if (!session || session.user.role !== "ADMIN") {
       throw new ApiError("Unauthorized.", 403);
     }
+    const tenant = await resolveTenantContextForSession(session);
+    if (!tenant.activeOrganizationId) {
+      throw new ApiError("No school context available.", 409);
+    }
 
     const payload = createUserSchema.parse(await request.json());
     const role = payload.role === "ADMIN" ? "ADMIN" : "USER";
@@ -85,6 +96,7 @@ export async function POST(request: Request) {
         role,
         displayName,
         status: "INVITED",
+        organizationId: role === "USER" ? tenant.activeOrganizationId : null,
       },
     });
 

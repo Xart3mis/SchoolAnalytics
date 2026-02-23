@@ -1,10 +1,13 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CreateUserForm } from "@/features/admin/components/create-user-form";
 import { LoginLinkRequestsPanel } from "@/features/admin/components/login-link-requests-panel";
+import { resolveTenantContextForSession } from "@/lib/auth/organization";
 import { requireAdmin } from "@/lib/auth/guards";
 
 export default async function AdminUsersPage() {
-  await requireAdmin();
+  const session = await requireAdmin();
+  const tenant = await resolveTenantContextForSession(session);
+  const scopeKey = tenant.activeOrganizationId ?? "none";
 
   return (
     <div className="flex flex-col gap-6">
@@ -15,7 +18,7 @@ export default async function AdminUsersPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <CreateUserForm />
+          <CreateUserForm key={`create-user-${scopeKey}`} />
         </CardContent>
       </Card>
 
@@ -26,7 +29,7 @@ export default async function AdminUsersPage() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <LoginLinkRequestsPanel />
+          <LoginLinkRequestsPanel key={`login-requests-${scopeKey}`} />
         </CardContent>
       </Card>
 

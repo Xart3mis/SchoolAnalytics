@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { ApiError, handleApiError } from "@/lib/api/errors";
+import { resolveTenantContextForSession } from "@/lib/auth/organization";
 import { getSessionFromCookies } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 
@@ -18,11 +19,19 @@ const noteIdSchema = z.object({
   id: z.string().trim().min(10).max(64),
 });
 
+function scopedPageKey(pageKey: string, organizationId: string) {
+  return `${organizationId}:${pageKey}`;
+}
+
 export async function GET(request: Request) {
   try {
     const session = await getSessionFromCookies();
     if (!session) {
       throw new ApiError("Unauthorized.", 403);
+    }
+    const tenant = await resolveTenantContextForSession(session);
+    if (!tenant.activeOrganizationId) {
+      throw new ApiError("No school context available.", 409);
     }
 
     const { searchParams } = new URL(request.url);
@@ -31,7 +40,7 @@ export async function GET(request: Request) {
     });
 
     const notes = await prisma.adminNote.findMany({
-      where: { pageKey },
+      where: { pageKey: scopedPageKey(pageKey, tenant.activeOrganizationId) },
       orderBy: { createdAt: "desc" },
       include: { author: true },
     });
@@ -55,12 +64,16 @@ export async function POST(request: Request) {
     if (!session || session.user.role !== "ADMIN") {
       throw new ApiError("Unauthorized.", 403);
     }
+    const tenant = await resolveTenantContextForSession(session);
+    if (!tenant.activeOrganizationId) {
+      throw new ApiError("No school context available.", 409);
+    }
 
     const { pageKey, content } = createNoteSchema.parse(await request.json());
     const note = await prisma.adminNote.create({
       data: {
         authorId: session.user.id,
-        pageKey,
+        pageKey: scopedPageKey(pageKey, tenant.activeOrganizationId),
         content,
       },
       include: { author: true },
@@ -86,11 +99,23 @@ export async function DELETE(request: Request) {
     if (!session || session.user.role !== "ADMIN") {
       throw new ApiError("Unauthorized.", 403);
     }
+    const tenant = await resolveTenantContextForSession(session);
+    if (!tenant.activeOrganizationId) {
+      throw new ApiError("No school context available.", 409);
+    }
 
     const { searchParams } = new URL(request.url);
     const { id } = noteIdSchema.parse({
       id: searchParams.get("id") ?? "",
     });
+
+    const note = await prisma.adminNote.findUnique({
+      where: { id },
+      select: { id: true, pageKey: true },
+    });
+    if (!note || !note.pageKey.startsWith(`${tenant.activeOrganizationId}:`)) {
+      throw new ApiError("Note not found.", 404);
+    }
 
     await prisma.adminNote.delete({ where: { id } });
     return NextResponse.json({ ok: true });

@@ -8,6 +8,7 @@ import {
   getLoginLinkExpiry,
   hashMagicToken,
 } from "@/lib/auth/magic";
+import { resolveTenantContextForSession } from "@/lib/auth/organization";
 import { getSessionFromCookies } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 
@@ -32,13 +33,20 @@ function buildMagicLoginLink(baseUrl: string, token: string) {
 
 export async function GET(request: Request) {
   try {
-    requireAdminSession(await getSessionFromCookies());
+    const session = requireAdminSession(await getSessionFromCookies());
+    const tenant = await resolveTenantContextForSession(session);
+    if (!tenant.activeOrganizationId) {
+      throw new ApiError("No school context available.", 409);
+    }
 
     const now = new Date();
     const rejectedCutoff = new Date(now.getTime() - 1000 * 60 * 60 * 24);
 
     const requests = await prisma.loginLinkRequest.findMany({
       where: {
+        requester: {
+          organizationId: tenant.activeOrganizationId,
+        },
         OR: [
           { status: "PENDING" },
           {
@@ -124,6 +132,10 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const session = requireAdminSession(await getSessionFromCookies());
+    const tenant = await resolveTenantContextForSession(session);
+    if (!tenant.activeOrganizationId) {
+      throw new ApiError("No school context available.", 409);
+    }
 
     const payload = reviewSchema.parse(await request.json());
     const reviewedAt = new Date();
@@ -138,12 +150,16 @@ export async function POST(request: Request) {
               email: true,
               displayName: true,
               status: true,
+              organizationId: true,
             },
           },
         },
       });
 
       if (!existing) {
+        throw new ApiError("Request not found.", 404);
+      }
+      if (existing.requester.organizationId !== tenant.activeOrganizationId) {
         throw new ApiError("Request not found.", 404);
       }
 
