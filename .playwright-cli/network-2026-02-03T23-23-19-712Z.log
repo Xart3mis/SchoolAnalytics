@@ -1,0 +1,9 @@
+[GET] https://documenter.gw.postman.com/view/metadata/2s93eeQ9CK => [200] 
+[GET] https://documenter.gw.postman.com/api/collections/25308020/2s93eeQ9CK?environment=25308020-0d3fa98c-06c9-43d7-9aaa-f1c0a6a1234e&segregateAuth=true&versionTag=latest => [200] 
+[GET] https://documenter.gw.postman.com/view/metadata/2s93eeQ9CK => [200] 
+[GET] https://documenter.gw.postman.com/api/collections/25308020/2s93eeQ9CK?environment=25308020-0d3fa98c-06c9-43d7-9aaa-f1c0a6a1234e&segregateAuth=true&versionTag=latest => [200] 
+[POST] https://documenter.gw.postman.com/api/examples/25308020/2s93eeQ9CK?environment=25308020-0d3fa98c-06c9-43d7-9aaa-f1c0a6a1234e&lang=curl&variant=cURL&versionTag=latest => [200] 
+[POST] https://bam.nr-data.net/events/1/NRJS-8482e4e3e1750395f5d?a=1588761156&sa=1&v=1216.487a282&t=Unnamed%20Transaction&rst=3076&ck=1&ref=https://documenter.getpostman.com/view/25308020/2s93eeQ9CK => [200] OK
+[POST] https://bam.nr-data.net/events/1/NRJS-8482e4e3e1750395f5d?a=1588761156&sa=1&v=1216.487a282&t=Unnamed%20Transaction&rst=12485&ck=1&ref=https://documenter.getpostman.com/view/25308020/2s93eeQ9CK => [200] OK
+[POST] https://bam.nr-data.net/jserrors/1/NRJS-8482e4e3e1750395f5d?a=1588761156&sa=1&v=1216.487a282&t=Unnamed%20Transaction&rst=63069&ck=1&ref=https://documenter.getpostman.com/view/25308020/2s93eeQ9CK => [200] OK
+[POST] https://bam.nr-data.net/events/1/NRJS-8482e4e3e1750395f5d?a=1588761156&sa=1&v=1216.487a282&t=Unnamed%20Transaction&rst=72487&ck=1&ref=https://documenter.getpostman.com/view/25308020/2s93eeQ9CK => [200] OK

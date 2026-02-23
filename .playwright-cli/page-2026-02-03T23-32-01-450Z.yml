@@ -1,0 +1,28 @@
+- generic [ref=e5]:
+  - generic [ref=e14]: Public
+  - generic [ref=e18]:
+    - generic [ref=e19]:
+      - generic [ref=e21]: ENVIRONMENT
+      - generic [ref=e25]:
+        - generic [ref=e26]:
+          - generic [ref=e27]: Production
+          - combobox [ref=e28]
+        - img [ref=e32]
+    - generic [ref=e34]:
+      - generic [ref=e36]: LAYOUT
+      - generic [ref=e40]:
+        - generic [ref=e41]:
+          - generic [ref=e42]: Single Column
+          - combobox [ref=e43]
+        - img [ref=e47]
+    - generic [ref=e49]:
+      - generic [ref=e51]: LANGUAGE
+      - generic [ref=e55]:
+        - generic [ref=e56]:
+          - generic [ref=e57]: cURL - cURL
+          - combobox [ref=e58]
+        - img [ref=e62]
+    - button [ref=e65] [cursor=pointer]:
+      - img [ref=e67]
+    - img [ref=e71] [cursor=pointer]
+  - generic [ref=e82]: Loading Collection...

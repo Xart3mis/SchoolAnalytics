@@ -1,0 +1,27 @@
+- generic [ref=e5]:
+  - generic [ref=e12]: Public
+  - generic [ref=e15]:
+    - generic [ref=e16]:
+      - generic [ref=e18]: ENVIRONMENT
+      - generic [ref=e22]:
+        - generic [ref=e23]:
+          - generic [ref=e24]: Select option
+          - combobox [ref=e25]
+        - img [ref=e29]
+    - generic [ref=e31]:
+      - generic [ref=e33]: LAYOUT
+      - generic [ref=e37]:
+        - generic [ref=e38]:
+          - generic [ref=e39]: Single Column
+          - combobox [ref=e40]
+        - img [ref=e44]
+    - generic [ref=e46]:
+      - generic [ref=e48]: LANGUAGE
+      - generic [ref=e52]:
+        - generic [ref=e53]:
+          - generic [ref=e54]: Select option
+          - combobox [ref=e55]
+        - img [ref=e59]
+    - button [ref=e62] [cursor=pointer]:
+      - img [ref=e64]
+  - generic [ref=e75]: Loading Collection...
