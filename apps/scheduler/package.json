@@ -9,6 +9,7 @@
   "dependencies": {
     "bullmq": "^5.58.5",
     "dotenv": "^17.2.3",
-    "ioredis": "^5.8.1"
+    "ioredis": "^5.8.1",
+    "uuid": "^11.1.0"
   }
 }
