@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 
+import { resolveSelectedTerm } from "@/lib/analytics/terms";
+import { resolveTenantContextForSession } from "@/lib/auth/organization";
 import { getSessionFromCookies } from "@/lib/auth/session";
-import { prisma } from "@/lib/prisma";
 import { Prisma } from "@school-analytics/db/client";
+import { prisma } from "@/lib/prisma";
 
 function toCsvRow(values: Array<string | number>) {
   return values
@@ -24,6 +26,10 @@ export async function GET(
   if (!session) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 403 });
   }
+  const tenant = await resolveTenantContextForSession(session);
+  if (!tenant.activeOrganizationId) {
+    return NextResponse.json({ error: "No school context available." }, { status: 409 });
+  }
 
   const { grade } = await context.params;
   const gradeLevel = Number(grade);
@@ -31,7 +37,12 @@ export async function GET(
     return NextResponse.json({ error: "Invalid grade." }, { status: 400 });
   }
 
-  const term = await prisma.academicTerm.findFirst({ orderBy: { startDate: "desc" } });
+  const url = new URL(request.url);
+  const term = await resolveSelectedTerm({
+    organizationId: tenant.activeOrganizationId,
+    yearId: url.searchParams.get("year") ?? undefined,
+    termId: url.searchParams.get("term") ?? undefined,
+  });
   if (!term) {
     return NextResponse.json({ error: "No term data." }, { status: 400 });
   }

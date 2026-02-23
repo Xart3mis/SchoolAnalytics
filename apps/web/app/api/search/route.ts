@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { getClassEntityList } from "@/lib/analytics/class-entities";
+import { resolveSelectedTerm } from "@/lib/analytics/terms";
+import { resolveTenantContextForSession } from "@/lib/auth/organization";
 import { getSessionFromCookies } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 
@@ -25,6 +27,10 @@ export async function GET(request: Request) {
   if (!session) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 403 });
   }
+  const tenant = await resolveTenantContextForSession(session);
+  if (!tenant.activeOrganizationId) {
+    return NextResponse.json({ error: "No school context available." }, { status: 409 });
+  }
 
   const { searchParams } = new URL(request.url);
   const query = (searchParams.get("q") ?? "").trim();
@@ -34,11 +40,20 @@ export async function GET(request: Request) {
 
   const rawLimit = Number(searchParams.get("limit") ?? "6");
   const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 10) : 6;
-  const termId = searchParams.get("term") ?? undefined;
+  const requestedTermId = searchParams.get("term") ?? undefined;
+  const scopedTerm = requestedTermId
+    ? await resolveSelectedTerm({
+        organizationId: tenant.activeOrganizationId,
+        termId: requestedTermId,
+      })
+    : null;
+  const termId =
+    scopedTerm && (!requestedTermId || scopedTerm.id === requestedTermId) ? scopedTerm.id : undefined;
 
   const [students, sectionClasses, entityClasses] = await Promise.all([
     prisma.student.findMany({
       where: {
+        organizationId: tenant.activeOrganizationId,
         OR: [
           { firstName: { contains: query, mode: "insensitive" } },
           { lastName: { contains: query, mode: "insensitive" } },
@@ -52,6 +67,7 @@ export async function GET(request: Request) {
     }),
     prisma.classSection.findMany({
       where: {
+        organizationId: tenant.activeOrganizationId,
         OR: [
           { name: { contains: query, mode: "insensitive" } },
           { course: { name: { contains: query, mode: "insensitive" } } },
@@ -64,7 +80,12 @@ export async function GET(request: Request) {
       },
       orderBy: [{ name: "asc" }],
     }),
-    termId ? getClassEntityList(termId, { query }) : Promise.resolve([]),
+    termId
+      ? getClassEntityList(termId, {
+          query,
+          organizationId: tenant.activeOrganizationId,
+        })
+      : Promise.resolve([]),
   ]);
 
   const classes =

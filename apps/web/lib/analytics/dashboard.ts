@@ -63,24 +63,30 @@ function riskLevel(score: number) {
 }
 
 export async function getDashboardData({
+  organizationId,
   termId,
   atRiskPage = 1,
   atRiskPageSize = 20,
 }: {
+  organizationId: string;
   termId?: string;
   atRiskPage?: number;
   atRiskPageSize?: number;
-} = {}): Promise<DashboardData> {
+}): Promise<DashboardData> {
   const resolvedAtRiskPage = Math.max(1, atRiskPage);
   const resolvedAtRiskPageSize = Math.max(1, atRiskPageSize);
   const atRiskOffset = (resolvedAtRiskPage - 1) * resolvedAtRiskPageSize;
 
   const activeTerm = termId
-    ? await prisma.academicTerm.findUnique({
-        where: { id: termId },
+    ? await prisma.academicTerm.findFirst({
+        where: {
+          id: termId,
+          academicYear: { organizationId },
+        },
         include: { academicYear: true },
       })
     : await prisma.academicTerm.findFirst({
+        where: { academicYear: { organizationId } },
         orderBy: { startDate: "desc" },
         include: { academicYear: true },
       });
@@ -102,7 +108,10 @@ export async function getDashboardData({
   }
 
   const terms = await prisma.academicTerm.findMany({
-    where: { academicYearId: activeTerm.academicYearId },
+    where: {
+      academicYearId: activeTerm.academicYearId,
+      academicYear: { organizationId },
+    },
     orderBy: { startDate: "asc" },
   });
 

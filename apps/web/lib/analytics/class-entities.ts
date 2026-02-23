@@ -188,9 +188,12 @@ function isUuidLike(value: string) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
-async function loadTermSections(termId: string): Promise<TermSection[]> {
+async function loadTermSections(termId: string, organizationId?: string): Promise<TermSection[]> {
   const sections = await prisma.classSection.findMany({
-    where: { academicTermId: termId },
+    where: {
+      academicTermId: termId,
+      ...(organizationId ? { organizationId } : {}),
+    },
     include: {
       academicYear: true,
       course: {
@@ -462,7 +465,7 @@ function buildStudentAverages(rows: ScoreRow[]) {
   return studentAverages;
 }
 
-async function resolveRouteToEntityId(routeId: string, termId: string) {
+async function resolveRouteToEntityId(routeId: string, termId: string, organizationId?: string) {
   const parsed = parseClassEntityId(routeId);
   if (parsed) return routeId;
 
@@ -472,7 +475,13 @@ async function resolveRouteToEntityId(routeId: string, termId: string) {
     where: { id: routeId },
     include: { course: { include: { gradeLevel: true } } },
   });
-  if (!section || section.academicTermId !== termId) return null;
+  if (
+    !section ||
+    section.academicTermId !== termId ||
+    (organizationId && section.organizationId !== organizationId)
+  ) {
+    return null;
+  }
 
   const gradeLevel = parseGradeLevel(section.course.gradeLevel?.name);
   const grouping = extractClassGroupingParts(section.name, {
@@ -484,9 +493,9 @@ async function resolveRouteToEntityId(routeId: string, termId: string) {
 
 export async function getClassEntityList(
   termId: string,
-  options?: { query?: string; gradeLevel?: number }
+  options?: { query?: string; gradeLevel?: number; organizationId?: string }
 ): Promise<ClassEntityListRow[]> {
-  const sections = await loadTermSections(termId);
+  const sections = await loadTermSections(termId, options?.organizationId);
   if (sections.length === 0) return [];
 
   const groups = buildGroups(sections);
@@ -582,26 +591,33 @@ export async function getClassEntityDetail(args: {
   routeId: string;
   termId: string;
   academicYearId: string;
+  organizationId?: string;
   atRiskLimit?: number;
 }): Promise<ClassEntityDetail | null> {
   const atRiskLimit = args.atRiskLimit ?? 15;
-  const entityId = await resolveRouteToEntityId(args.routeId, args.termId);
+  const entityId = await resolveRouteToEntityId(args.routeId, args.termId, args.organizationId);
   if (!entityId) return null;
 
   const entityParts = parseClassEntityId(entityId);
   if (!entityParts) return null;
 
   const [termSections, allYearSections, terms] = await Promise.all([
-    loadTermSections(args.termId),
+    loadTermSections(args.termId, args.organizationId),
     prisma.classSection.findMany({
-      where: { academicYearId: args.academicYearId },
+      where: {
+        academicYearId: args.academicYearId,
+        ...(args.organizationId ? { organizationId: args.organizationId } : {}),
+      },
       include: {
         course: { include: { gradeLevel: true } },
         academicTerm: true,
       },
     }),
     prisma.academicTerm.findMany({
-      where: { academicYearId: args.academicYearId },
+      where: {
+        academicYearId: args.academicYearId,
+        ...(args.organizationId ? { academicYear: { organizationId: args.organizationId } } : {}),
+      },
       orderBy: { startDate: "asc" },
     }),
   ]);
@@ -775,7 +791,10 @@ export async function getClassEntityDetail(args: {
   const studentIds = Array.from(studentAverages.keys());
   const studentProfiles = studentIds.length
     ? await prisma.student.findMany({
-        where: { id: { in: studentIds } },
+        where: {
+          id: { in: studentIds },
+          ...(args.organizationId ? { organizationId: args.organizationId } : {}),
+        },
         include: { user: true },
       })
     : [];

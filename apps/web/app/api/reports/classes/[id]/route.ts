@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 
 import { getClassEntityDetail } from "@/lib/analytics/class-entities";
+import { resolveSelectedTerm } from "@/lib/analytics/terms";
+import { resolveTenantContextForSession } from "@/lib/auth/organization";
 import { getSessionFromCookies } from "@/lib/auth/session";
-import { prisma } from "@/lib/prisma";
 
 function toCsvRow(values: Array<string | number>) {
   return values
@@ -21,14 +22,20 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   if (!session) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 403 });
   }
+  const tenant = await resolveTenantContextForSession(session);
+  if (!tenant.activeOrganizationId) {
+    return NextResponse.json({ error: "No school context available." }, { status: 409 });
+  }
 
   const { id } = await context.params;
   const url = new URL(request.url);
   const requestedTermId = url.searchParams.get("term") ?? undefined;
   const requestedYearId = url.searchParams.get("year") ?? undefined;
-  const term = requestedTermId
-    ? await prisma.academicTerm.findUnique({ where: { id: requestedTermId } })
-    : await prisma.academicTerm.findFirst({ orderBy: { startDate: "desc" } });
+  const term = await resolveSelectedTerm({
+    organizationId: tenant.activeOrganizationId,
+    yearId: requestedYearId,
+    termId: requestedTermId,
+  });
   if (!term) {
     return NextResponse.json({ error: "No term data." }, { status: 400 });
   }
@@ -36,7 +43,8 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   const detail = await getClassEntityDetail({
     routeId: id,
     termId: term.id,
-    academicYearId: requestedYearId ?? term.academicYearId,
+    academicYearId: term.academicYearId,
+    organizationId: tenant.activeOrganizationId,
     atRiskLimit: 2000,
   });
   if (!detail) {
