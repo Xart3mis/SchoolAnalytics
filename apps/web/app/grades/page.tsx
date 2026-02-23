@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AdminNotes } from "@/features/notes/components/admin-notes";
 import { StatTiles } from "@/features/analytics/components/stat-tiles";
 import { resolveSelectedTerm } from "@/lib/analytics/terms";
-import { requireSession } from "@/lib/auth/guards";
+import { requireTenantSession } from "@/lib/auth/guards";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@school-analytics/db/client";
 
@@ -13,11 +13,12 @@ interface GradesPageProps {
 }
 
 export default async function GradesPage({ searchParams }: GradesPageProps) {
-  await requireSession();
+  const { activeOrganizationId } = await requireTenantSession();
   const resolved = await searchParams;
   const query = resolved?.q ?? "";
   const yearId = resolved?.year;
   const term = await resolveSelectedTerm({
+    organizationId: activeOrganizationId,
     yearId,
     termId: resolved?.term,
   });

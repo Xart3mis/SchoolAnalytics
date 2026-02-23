@@ -16,7 +16,7 @@ import {
 } from "@/lib/analytics/aggregates";
 import { getStudentAssignmentTrend, getStudentSubjectTrends } from "@/lib/analytics/trends";
 import { resolveSelectedTerm } from "@/lib/analytics/terms";
-import { requireSession } from "@/lib/auth/guards";
+import { requireTenantSession } from "@/lib/auth/guards";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@school-analytics/db/client";
 
@@ -26,12 +26,15 @@ interface StudentDetailPageProps {
 }
 
 export default async function StudentDetailPage({ params, searchParams }: StudentDetailPageProps) {
-  await requireSession();
+  const { activeOrganizationId } = await requireTenantSession();
   const { id } = await params;
   const resolvedSearchParams = await searchParams;
   const yearId = resolvedSearchParams?.year;
-  const student = await prisma.student.findUnique({
-    where: { id },
+  const student = await prisma.student.findFirst({
+    where: {
+      id,
+      organizationId: activeOrganizationId,
+    },
     include: { user: true },
   });
   if (!student) {
@@ -39,6 +42,7 @@ export default async function StudentDetailPage({ params, searchParams }: Studen
   }
 
   const term = await resolveSelectedTerm({
+    organizationId: activeOrganizationId,
     yearId,
     termId: resolvedSearchParams?.term,
   });

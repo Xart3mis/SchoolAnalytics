@@ -11,7 +11,7 @@ import { TermTrendLine } from "@/features/analytics/components/term-trend-line";
 import { StatTiles } from "@/features/analytics/components/stat-tiles";
 import { getClassEntityDetail } from "@/lib/analytics/class-entities";
 import { resolveSelectedTerm } from "@/lib/analytics/terms";
-import { requireSession } from "@/lib/auth/guards";
+import { requireTenantSession } from "@/lib/auth/guards";
 
 interface ClassDetailPageProps {
   params: Promise<{ id: string }>;
@@ -19,11 +19,12 @@ interface ClassDetailPageProps {
 }
 
 export default async function ClassDetailPage({ params, searchParams }: ClassDetailPageProps) {
-  await requireSession();
+  const { activeOrganizationId } = await requireTenantSession();
   const { id } = await params;
   const resolvedSearchParams = await searchParams;
   const yearId = resolvedSearchParams?.year;
   const term = await resolveSelectedTerm({
+    organizationId: activeOrganizationId,
     yearId,
     termId: resolvedSearchParams?.term,
   });
@@ -35,6 +36,7 @@ export default async function ClassDetailPage({ params, searchParams }: ClassDet
     routeId: id,
     termId: term.id,
     academicYearId: term.academicYearId,
+    organizationId: activeOrganizationId,
     atRiskLimit: 15,
   });
   if (!detail) {

@@ -3,19 +3,20 @@ import { AdminNotes } from "@/features/notes/components/admin-notes";
 import { StatTiles } from "@/features/analytics/components/stat-tiles";
 import { getDashboardData } from "@/lib/analytics/dashboard";
 import { resolveSelectedTerm } from "@/lib/analytics/terms";
-import { requireSession } from "@/lib/auth/guards";
+import { requireTenantSession } from "@/lib/auth/guards";
 
 interface StudentsPageProps {
   searchParams?: Promise<{ page?: string; term?: string; year?: string }>;
 }
 
 export default async function StudentsPage({ searchParams }: StudentsPageProps) {
-  await requireSession();
+  const { activeOrganizationId } = await requireTenantSession();
   const resolved = await searchParams;
   const requestedPage = Math.max(1, Number(resolved?.page ?? "1"));
   const pageSize = 20;
   const yearId = resolved?.year;
   const term = await resolveSelectedTerm({
+    organizationId: activeOrganizationId,
     yearId,
     termId: resolved?.term,
   });
@@ -24,6 +25,7 @@ export default async function StudentsPage({ searchParams }: StudentsPageProps) 
   }
 
   const initialData = await getDashboardData({
+    organizationId: activeOrganizationId,
     termId: term.id,
     atRiskPage: requestedPage,
     atRiskPageSize: pageSize,
@@ -34,6 +36,7 @@ export default async function StudentsPage({ searchParams }: StudentsPageProps) 
     page === requestedPage
       ? initialData
       : await getDashboardData({
+          organizationId: activeOrganizationId,
           termId: term.id,
           atRiskPage: page,
           atRiskPageSize: pageSize,

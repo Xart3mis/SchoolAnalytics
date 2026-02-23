@@ -7,7 +7,7 @@ import { AdminNotes } from "@/features/notes/components/admin-notes";
 import { getDashboardData } from "@/lib/analytics/dashboard";
 import { getStudentList } from "@/lib/analytics/lists";
 import { resolveSelectedTerm } from "@/lib/analytics/terms";
-import { requireSession } from "@/lib/auth/guards";
+import { requireTenantSession } from "@/lib/auth/guards";
 
 interface DashboardPageProps {
   searchParams?: Promise<{
@@ -20,7 +20,7 @@ interface DashboardPageProps {
 }
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
-  await requireSession();
+  const { activeOrganizationId } = await requireTenantSession();
   const resolvedSearchParams = await searchParams;
   const yearId = resolvedSearchParams?.year;
   const requestedPage = Math.max(1, Number(resolvedSearchParams?.page ?? "1"));
@@ -29,10 +29,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   const selectedGrade = Number.isFinite(selectedGradeValue) ? selectedGradeValue : undefined;
   const pageSize = 15;
   const term = await resolveSelectedTerm({
+    organizationId: activeOrganizationId,
     yearId,
     termId: resolvedSearchParams?.term,
   });
   const data = await getDashboardData({
+    organizationId: activeOrganizationId,
     termId: term?.id,
   });
   const initialStudents =

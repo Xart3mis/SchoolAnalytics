@@ -17,7 +17,7 @@ import {
 import { getGradeAtRiskList } from "@/lib/analytics/risk";
 import { getGradeAssignmentTrend, getGradeSubjectTrends } from "@/lib/analytics/trends";
 import { resolveSelectedTerm } from "@/lib/analytics/terms";
-import { requireSession } from "@/lib/auth/guards";
+import { requireTenantSession } from "@/lib/auth/guards";
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@school-analytics/db/client";
 
@@ -27,7 +27,7 @@ interface GradeDetailPageProps {
 }
 
 export default async function GradeDetailPage({ params, searchParams }: GradeDetailPageProps) {
-  await requireSession();
+  const { activeOrganizationId } = await requireTenantSession();
   const { grade } = await params;
   const resolvedSearchParams = await searchParams;
   const yearId = resolvedSearchParams?.year;
@@ -37,6 +37,7 @@ export default async function GradeDetailPage({ params, searchParams }: GradeDet
   }
 
   const term = await resolveSelectedTerm({
+    organizationId: activeOrganizationId,
     yearId,
     termId: resolvedSearchParams?.term,
   });
@@ -232,7 +233,7 @@ export default async function GradeDetailPage({ params, searchParams }: GradeDet
       <AtRiskMiniTable
         title="At-Risk Students"
         data={atRisk}
-        exportHref={`/api/reports/grades/${gradeLevel}`}
+        exportHref={`/api/reports/grades/${gradeLevel}?year=${term.academicYearId}&term=${term.id}`}
         yearId={term.academicYearId}
         termId={term.id}
       />

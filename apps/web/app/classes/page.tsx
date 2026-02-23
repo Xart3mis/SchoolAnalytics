@@ -6,7 +6,7 @@ import { ClassesOverviewCharts } from "@/features/analytics/components/classes-o
 import { StatTiles } from "@/features/analytics/components/stat-tiles";
 import { resolveSelectedTerm } from "@/lib/analytics/terms";
 import { getClassEntityList } from "@/lib/analytics/class-entities";
-import { requireSession } from "@/lib/auth/guards";
+import { requireTenantSession } from "@/lib/auth/guards";
 import { ClassesFilters } from "@/features/analytics/components/classes-filters";
 
 interface ClassesPageProps {
@@ -14,11 +14,12 @@ interface ClassesPageProps {
 }
 
 export default async function ClassesPage({ searchParams }: ClassesPageProps) {
-  await requireSession();
+  const { activeOrganizationId } = await requireTenantSession();
   const resolved = await searchParams;
   const query = resolved?.q ?? "";
   const yearId = resolved?.year;
   const term = await resolveSelectedTerm({
+    organizationId: activeOrganizationId,
     yearId,
     termId: resolved?.term,
   });
@@ -32,6 +33,7 @@ export default async function ClassesPage({ searchParams }: ClassesPageProps) {
   const classes = await getClassEntityList(term.id, {
     query,
     gradeLevel: selectedGrade,
+    organizationId: activeOrganizationId,
   });
 
   const gradeDistribution = Array.from(

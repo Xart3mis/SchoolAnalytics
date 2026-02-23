@@ -1,7 +1,7 @@
 import { EntityComparisonWorkbench } from "@/features/analytics/components/entity-comparison-workbench";
 import { getComparableEntitiesForTerm } from "@/lib/analytics/entity-comparison";
 import { resolveSelectedTerm } from "@/lib/analytics/terms";
-import { requireSession } from "@/lib/auth/guards";
+import { requireTenantSession } from "@/lib/auth/guards";
 
 interface ComparePageProps {
   searchParams?: Promise<{
@@ -11,10 +11,11 @@ interface ComparePageProps {
 }
 
 export default async function ComparePage({ searchParams }: ComparePageProps) {
-  await requireSession();
+  const { activeOrganizationId } = await requireTenantSession();
 
   const resolvedSearchParams = await searchParams;
   const term = await resolveSelectedTerm({
+    organizationId: activeOrganizationId,
     yearId: resolvedSearchParams?.year,
     termId: resolvedSearchParams?.term,
   });
