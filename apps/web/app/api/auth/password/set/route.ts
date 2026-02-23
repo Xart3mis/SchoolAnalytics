@@ -3,9 +3,16 @@ import { z } from "zod";
 
 import { ApiError, handleApiError } from "@/lib/api/errors";
 import { logAuthAuditEvent } from "@/lib/auth/audit";
+import {
+  applyActiveOrganizationCookie,
+  resolveTenantContextForSession,
+} from "@/lib/auth/organization";
 import { hashPassword } from "@/lib/auth/password";
-import { createSession, SESSION_COOKIE_NAME } from "@/lib/auth/session";
-import { getSessionFromCookies } from "@/lib/auth/session";
+import {
+  createSession,
+  getSessionFromCookies,
+  SESSION_COOKIE_NAME,
+} from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 
 const setPasswordSchema = z.object({
@@ -52,6 +59,15 @@ export async function POST(request: Request) {
       await tx.session.deleteMany({ where: { userId: session.user.id } });
     });
 
+    const tenant = await resolveTenantContextForSession(session);
+    if (!tenant.activeOrganizationId) {
+      throw new ApiError(
+        session.user.role === "ADMIN"
+          ? "No schools are available for this admin account yet."
+          : "Your assigned school could not be found.",
+        409
+      );
+    }
     const { token, expiresAt } = await createSession(session.user.id);
     await logAuthAuditEvent({
       eventType: "PASSWORD_SET",
@@ -68,6 +84,7 @@ export async function POST(request: Request) {
       expires: expiresAt,
       path: "/",
     });
+    applyActiveOrganizationCookie(response, tenant.activeOrganizationId);
     return response;
   } catch (error) {
     return handleApiError(error);

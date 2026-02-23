@@ -119,7 +119,7 @@ export default function LoginPage() {
               <Input name="email" type="email" placeholder="you@school.org" required />
               {magicStatus ? <p className="text-xs text-[color:var(--text-muted)]">{magicStatus}</p> : null}
               <Button className="w-full" type="submit" disabled={magicLoading}>
-                {magicLoading ? "Sending..." : "Email sign-in link"}
+                {magicLoading ? "Sending..." : "Request sign-in link"}
               </Button>
             </form>
           ) : null}

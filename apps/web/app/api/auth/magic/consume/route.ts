@@ -4,6 +4,10 @@ import { z } from "zod";
 import { ApiError, handleApiError } from "@/lib/api/errors";
 import { logAuthAuditEvent } from "@/lib/auth/audit";
 import { hashMagicToken } from "@/lib/auth/magic";
+import {
+  applyActiveOrganizationCookie,
+  resolveTenantContextForUser,
+} from "@/lib/auth/organization";
 import { createSession, SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
 
@@ -71,6 +75,21 @@ export async function POST(request: Request) {
       where: { id: link.userId },
       data: { status: nextStatus },
     });
+    if (user.role !== "ADMIN" && !user.organizationId) {
+      throw new ApiError("Account is not assigned to a school.", 403);
+    }
+    const tenant = await resolveTenantContextForUser({
+      role: user.role,
+      organizationId: user.organizationId,
+    });
+    if (!tenant.activeOrganizationId) {
+      throw new ApiError(
+        user.role === "ADMIN"
+          ? "No schools are available for this admin account yet."
+          : "Your assigned school could not be found.",
+        409
+      );
+    }
 
     const { token, expiresAt } = await createSession(user.id);
     await logAuthAuditEvent({
@@ -93,6 +112,7 @@ export async function POST(request: Request) {
       expires: expiresAt,
       path: "/",
     });
+    applyActiveOrganizationCookie(response, tenant.activeOrganizationId);
 
     return response;
   } catch (error) {

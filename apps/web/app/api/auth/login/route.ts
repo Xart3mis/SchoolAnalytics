@@ -3,6 +3,10 @@ import { z } from "zod";
 
 import { ApiError, handleApiError } from "@/lib/api/errors";
 import { isAdminBootstrapped } from "@/lib/auth/bootstrap";
+import {
+  applyActiveOrganizationCookie,
+  resolveTenantContextForUser,
+} from "@/lib/auth/organization";
 import { verifyPassword } from "@/lib/auth/password";
 import { createSession, SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
@@ -35,6 +39,22 @@ export async function POST(request: Request) {
     if (!valid) {
       throw new ApiError("Invalid credentials.", 401);
     }
+    if (user.role !== "ADMIN" && !user.organizationId) {
+      throw new ApiError("Account is not assigned to a school.", 403);
+    }
+
+    const tenant = await resolveTenantContextForUser({
+      role: user.role,
+      organizationId: user.organizationId,
+    });
+    if (!tenant.activeOrganizationId) {
+      throw new ApiError(
+        user.role === "ADMIN"
+          ? "No schools are available for this admin account yet."
+          : "Your assigned school could not be found.",
+        409
+      );
+    }
 
     const { token, expiresAt } = await createSession(user.id);
     const cookieConfig = {
@@ -51,11 +71,13 @@ export async function POST(request: Request) {
         user: { id: user.id, email: user.email, role: user.role },
       });
       response.cookies.set(SESSION_COOKIE_NAME, token, cookieConfig);
+      applyActiveOrganizationCookie(response, tenant.activeOrganizationId);
       return response;
     }
 
     const response = NextResponse.redirect(new URL("/", request.url));
     response.cookies.set(SESSION_COOKIE_NAME, token, cookieConfig);
+    applyActiveOrganizationCookie(response, tenant.activeOrganizationId);
     return response;
   } catch (error) {
     return handleApiError(error);

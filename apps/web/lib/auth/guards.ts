@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { isAdminBootstrapped } from "@/lib/auth/bootstrap";
+import { resolveTenantContextForSession } from "@/lib/auth/organization";
 import { getSessionFromCookies } from "@/lib/auth/session";
 
 export async function requireSession() {
@@ -22,4 +23,21 @@ export async function requireAdmin() {
     redirect("/");
   }
   return session;
+}
+
+export async function requireTenantSession() {
+  const session = await requireSession();
+  const tenant = await resolveTenantContextForSession(session);
+  if (!tenant.activeOrganizationId) {
+    if (session.user.role === "ADMIN") {
+      redirect("/admin/users");
+    }
+    redirect("/login");
+  }
+  const { activeOrganizationId } = tenant;
+  return {
+    session,
+    ...tenant,
+    activeOrganizationId,
+  };
 }

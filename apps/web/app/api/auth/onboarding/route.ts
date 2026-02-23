@@ -3,6 +3,10 @@ import { z } from "zod";
 
 import { ApiError, handleApiError } from "@/lib/api/errors";
 import { isAdminBootstrapped } from "@/lib/auth/bootstrap";
+import {
+  applyActiveOrganizationCookie,
+  resolveTenantContextForUser,
+} from "@/lib/auth/organization";
 import { hashPassword } from "@/lib/auth/password";
 import { createSession, SESSION_COOKIE_NAME } from "@/lib/auth/session";
 import { prisma } from "@/lib/prisma";
@@ -61,6 +65,10 @@ export async function POST(request: Request) {
     });
 
     const { token, expiresAt } = await createSession(user.id);
+    const tenant = await resolveTenantContextForUser({
+      role: user.role,
+      organizationId: user.organizationId,
+    });
     const response = NextResponse.json({
       ok: true,
       redirectTo: "/",
@@ -74,6 +82,7 @@ export async function POST(request: Request) {
       expires: expiresAt,
       path: "/",
     });
+    applyActiveOrganizationCookie(response, tenant.activeOrganizationId);
 
     return response;
   } catch (error) {
