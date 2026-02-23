@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { v4 as uuidv4 } from "uuid";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -256,7 +257,7 @@ export function EntityComparisonWorkbench({ entities, activeTermLabel }: EntityC
     const name = presetName.trim();
     if (!name) return;
     const nextPreset: ComparisonPreset = {
-      id: crypto.randomUUID(),
+      id: uuidv4(),
       name,
       left,
       right,

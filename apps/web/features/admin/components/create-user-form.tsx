@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { v4 as uuidv4 } from "uuid";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -84,7 +85,7 @@ export function CreateUserForm() {
     if (result?.invite?.link && result?.invite?.expiresAt) {
       setInviteLinks((current) => [
         {
-          id: crypto.randomUUID(),
+          id: uuidv4(),
           name: `${payload.firstName} ${payload.lastName}`.trim(),
           email: payload.email,
           link: String(result.invite.link),
