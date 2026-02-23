@@ -22,10 +22,25 @@ type AcademicYearOption = {
   terms: Array<{ id: string; name: string }>;
 };
 
+type OrganizationOption = {
+  id: string;
+  name: string;
+};
+
+type MeResponse = {
+  user: { displayName?: string; email?: string; role?: string; organizationId?: string | null };
+  organizations?: OrganizationOption[];
+  activeOrganization?: OrganizationOption | null;
+  canSwitchOrganizations?: boolean;
+};
+
 export function AppHeader() {
   const { theme, resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = React.useState(false);
-  const [user, setUser] = React.useState<{ displayName?: string; email?: string; role?: string } | null>(null);
+  const [user, setUser] = React.useState<MeResponse["user"] | null>(null);
+  const [organizations, setOrganizations] = React.useState<OrganizationOption[]>([]);
+  const [activeOrganizationId, setActiveOrganizationId] = React.useState<string | null>(null);
+  const [canSwitchOrganizations, setCanSwitchOrganizations] = React.useState(false);
   const { toggleSidebar } = useUiStore();
   const router = useRouter();
   const pathname = usePathname();
@@ -45,27 +60,30 @@ export function AppHeader() {
     setMounted(true);
   }, []);
 
-  React.useEffect(() => {
-    async function loadUser() {
-      const response = await fetch("/api/auth/me");
-      if (!response.ok) return;
-      const data = await response.json();
-      setUser(data.user);
-    }
+  const loadUser = React.useCallback(async () => {
+    const response = await fetch("/api/auth/me");
+    if (!response.ok) return;
+    const data = (await response.json()) as MeResponse;
+    setUser(data.user);
+    setOrganizations(Array.isArray(data.organizations) ? data.organizations : []);
+    setActiveOrganizationId(data.activeOrganization?.id ?? data.user.organizationId ?? null);
+    setCanSwitchOrganizations(Boolean(data.canSwitchOrganizations));
+  }, []);
 
+  const loadAcademicYears = React.useCallback(async () => {
+    const response = await fetch("/api/academic-years");
+    if (!response.ok) return;
+    const data = await response.json();
+    setAcademicYears(data.years ?? []);
+  }, []);
+
+  React.useEffect(() => {
     loadUser();
-  }, []);
+  }, [loadUser]);
 
   React.useEffect(() => {
-    async function loadAcademicYears() {
-      const response = await fetch("/api/academic-years");
-      if (!response.ok) return;
-      const data = await response.json();
-      setAcademicYears(data.years ?? []);
-    }
-
     loadAcademicYears();
-  }, []);
+  }, [loadAcademicYears]);
 
   const trimmedQuery = query.trim();
   const totalResults = results.students.length + results.classes.length;
@@ -78,6 +96,8 @@ export function AppHeader() {
   const selectedTerm = selectedTermId
     ? selectedYear?.terms.find((term) => term.id === selectedTermId)
     : selectedYear?.terms[selectedYear.terms.length - 1] ?? undefined;
+  const activeOrganization = organizations.find((organization) => organization.id === activeOrganizationId);
+  const selectedOrganizationLabel = activeOrganization?.name ?? "School";
   const selectedYearLabel = selectedYear ? `${selectedYear.name}` : "Select year";
   const selectedTermLabel = selectedTerm?.name ?? "T-";
   const yearTermQuery = new URLSearchParams();
@@ -196,12 +216,60 @@ export function AppHeader() {
     [pathname, router, searchParams, selectedYear?.id]
   );
 
+  const handleSelectOrganization = React.useCallback(
+    async (organizationId: string) => {
+      if (organizationId === activeOrganizationId) {
+        setMenuOpen(false);
+        return;
+      }
+
+      const response = await fetch("/api/auth/organization", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ organizationId }),
+      });
+      if (!response.ok) return;
+
+      const data = await response.json();
+      setOrganizations(Array.isArray(data.organizations) ? data.organizations : []);
+      setActiveOrganizationId(data.activeOrganization?.id ?? organizationId);
+      setCanSwitchOrganizations(Boolean(data.canSwitchOrganizations));
+
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("year");
+      params.delete("term");
+      params.delete("page");
+      const query = params.toString();
+      router.push(query ? `${pathname}?${query}` : pathname);
+
+      await loadAcademicYears();
+      setMenuOpen(false);
+      router.refresh();
+    },
+    [activeOrganizationId, loadAcademicYears, pathname, router, searchParams]
+  );
+
   React.useEffect(() => {
-    if (academicYears.length === 0 || selectedYearIdParam || selectedTermId) {
+    if (academicYears.length === 0) {
       return;
     }
+
+    const hasSelectedYear = selectedYearIdParam
+      ? academicYears.some((year) => year.id === selectedYearIdParam)
+      : false;
+    const hasSelectedTerm = selectedTermId
+      ? academicYears.some((year) => year.terms.some((term) => term.id === selectedTermId))
+      : false;
+
+    const hasValidYearSelection = selectedYearIdParam ? hasSelectedYear : true;
+    const hasValidTermSelection = selectedTermId ? hasSelectedTerm : true;
+    if (hasValidYearSelection && hasValidTermSelection) {
+      return;
+    }
+
     const params = new URLSearchParams(searchParams.toString());
     params.set("year", academicYears[0].id);
+    params.delete("term");
     params.delete("page");
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : pathname);
@@ -344,7 +412,7 @@ export function AppHeader() {
               </span>
             ) : null}
             <span className="hidden text-[10px] uppercase tracking-[0.16em] text-[color:var(--text-muted)] sm:inline">
-              {selectedYearLabel} · {selectedTermLabel}
+              {selectedOrganizationLabel} · {selectedYearLabel} · {selectedTermLabel}
             </span>
             <ChevronDown className="h-3.5 w-3.5 text-[color:var(--text-muted)]" />
           </button>
@@ -355,6 +423,41 @@ export function AppHeader() {
                   {user?.displayName ?? "User"}
                 </div>
                 <div className="text-xs text-[color:var(--text-muted)]">{user?.email ?? ""}</div>
+              </div>
+              <div className="border-t border-[color:var(--border)] px-2 py-2">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--text-muted)]">
+                  School
+                </div>
+                <div className="mt-2 flex flex-col gap-1">
+                  {organizations.length === 0 ? (
+                    <div className="px-2 py-2 text-xs text-[color:var(--text-muted)]">
+                      No schools available.
+                    </div>
+                  ) : (
+                    organizations.map((organization) => {
+                      const isSelected = activeOrganizationId === organization.id;
+                      return (
+                        <button
+                          key={organization.id}
+                          type="button"
+                          onClick={() => handleSelectOrganization(organization.id)}
+                          disabled={!canSwitchOrganizations && !isSelected}
+                          className={`flex w-full items-center justify-between rounded-lg px-2 py-2 text-xs font-semibold uppercase tracking-[0.14em] ${isSelected
+                            ? "bg-[color:var(--accent-2)] text-[color:var(--text)]"
+                            : "text-[color:var(--text-muted)] hover:bg-[color:var(--surface-strong)] hover:text-[color:var(--text)]"
+                            }`}
+                        >
+                          <span>{organization.name}</span>
+                          {isSelected ? (
+                            <span className="text-[10px] uppercase tracking-[0.18em] text-[color:var(--text-muted)]">
+                              Selected
+                            </span>
+                          ) : null}
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
               </div>
               <div className="border-t border-[color:var(--border)] px-2 py-2">
                 <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[color:var(--text-muted)]">
