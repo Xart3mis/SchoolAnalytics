@@ -1,5 +1,5 @@
+const { v4: uuidv4 } = require("uuid");
 const path = require("path");
-const { randomUUID } = require("crypto");
 const dotenv = require("dotenv");
 
 dotenv.config({ path: path.resolve(__dirname, "../../../.env"), quiet: true });
@@ -15,24 +15,24 @@ function parseInterval(value, fallbackMs) {
 
 const queueName = process.env.POLL_QUEUE_NAME || "polling";
 const redisUrl = process.env.REDIS_URL || "redis://127.0.0.1:6379";
-const pollIntervalMs = parseInterval(process.env.POLL_INTERVAL_MS, 5 * 60 * 1000);
 const sessionCleanupIntervalMs = parseInterval(
   process.env.SESSION_CLEANUP_INTERVAL_MS,
-  60 * 60 * 1000
+  60 * 60 * 1000,
 );
-const sources = (process.env.POLL_SOURCES || "Toddle")
-  .split(",")
-  .map((source) => source.trim())
-  .filter(Boolean);
+
 const schedulerLockKey = `${queueName}:scheduler:bootstrap-lock`;
-const schedulerLockTtlMs = parseInterval(process.env.SCHEDULER_BOOTSTRAP_LOCK_TTL_MS, 30_000);
-const schedulerLockToken = randomUUID();
+const schedulerLockTtlMs = parseInterval(
+  process.env.SCHEDULER_BOOTSTRAP_LOCK_TTL_MS,
+  30_000,
+);
+
+const schedulerLockToken = uuidv4();
 
 const connection = new IORedis(redisUrl, {
   maxRetriesPerRequest: null,
 });
 
-const queue = new Queue(queueName, { connection });
+const maintenanceQueue = new Queue(queueName, { connection });
 
 async function acquireBootstrapLock() {
   const result = await connection.set(
@@ -40,8 +40,9 @@ async function acquireBootstrapLock() {
     schedulerLockToken,
     "PX",
     schedulerLockTtlMs,
-    "NX"
+    "NX",
   );
+
   return result === "OK";
 }
 
@@ -56,7 +57,7 @@ async function releaseBootstrapLock() {
       `,
       1,
       schedulerLockKey,
-      schedulerLockToken
+      schedulerLockToken,
     );
   } catch (error) {
     console.error("[scheduler] failed to release bootstrap lock:", error);
@@ -66,29 +67,14 @@ async function releaseBootstrapLock() {
 async function enqueuePollJobs() {
   const hasLock = await acquireBootstrapLock();
   if (!hasLock) {
-    console.log("[scheduler] another instance is configuring jobs; skipping bootstrap");
+    console.log(
+      "[scheduler] another instance is configuring jobs; skipping bootstrap",
+    );
     return;
   }
 
   try {
-    for (const source of sources) {
-      await queue.upsertJobScheduler(
-        `poll:${source}`,
-        {
-          every: pollIntervalMs,
-        },
-        {
-          name: "poll-source",
-          data: { source },
-          opts: {
-            removeOnComplete: 100,
-            removeOnFail: 200,
-          },
-        }
-      );
-    }
-
-    await queue.upsertJobScheduler(
+    await maintenanceQueue.upsertJobScheduler(
       "maintenance:expired-sessions",
       {
         every: sessionCleanupIntervalMs,
@@ -104,7 +90,7 @@ async function enqueuePollJobs() {
     );
 
     console.log(
-      `[scheduler] configured ${sources.length} polling job(s) and session cleanup on "${queueName}" (poll=${pollIntervalMs}ms, cleanup=${sessionCleanupIntervalMs}ms)`
+      `[scheduler] configured session cleanup on "${queueName}" (cleanup=${sessionCleanupIntervalMs}ms)`,
     );
   } finally {
     await releaseBootstrapLock();
@@ -123,7 +109,7 @@ async function shutdown(signal, exitCode = 0) {
   shutdown.inFlight = true;
   console.log(`[scheduler] received ${signal}, shutting down...`);
   try {
-    await queue.close();
+    await maintenanceQueue.close();
   } catch (error) {
     console.error("[scheduler] failed to close queue:", error);
   }
@@ -134,6 +120,7 @@ async function shutdown(signal, exitCode = 0) {
   }
   process.exit(exitCode);
 }
+
 shutdown.inFlight = false;
 
 connection.on("error", (error) => {
@@ -143,13 +130,16 @@ connection.on("error", (error) => {
 process.on("SIGINT", () => {
   void shutdown("SIGINT");
 });
+
 process.on("SIGTERM", () => {
   void shutdown("SIGTERM");
 });
+
 process.on("uncaughtException", (error) => {
   console.error("[scheduler] uncaughtException:", error);
   void shutdown("uncaughtException", 1);
 });
+
 process.on("unhandledRejection", (reason) => {
   console.error("[scheduler] unhandledRejection:", reason);
   void shutdown("unhandledRejection", 1);
