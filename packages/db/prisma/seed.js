@@ -71,6 +71,11 @@ const ACADEMIC_YEARS = [
   { name: "2025-2026", startDate: "2025-08-15", endDate: "2026-06-15" },
 ];
 
+const ORGANIZATION_NAMES = [
+  ["Carleton College International School", "CCIS"],
+  ["Manaret Heliopolis International School", "MHIS"],
+];
+
 const FEEDBACK_BANK = [
   "Consistent effort with clear growth.",
   "Strong understanding shown in class and tasks.",
@@ -117,7 +122,9 @@ function logProgress(message) {
 }
 
 function sanitizeIdentifier(input, fallback = "X") {
-  const normalized = input.replace(/[^A-Za-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  const normalized = input
+    .replace(/[^A-Za-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
   return normalized || fallback;
 }
 
@@ -201,8 +208,14 @@ function buildCohortStudents(grade, section, count) {
     "Fahmy",
   ];
   return Array.from({ length: count }, (_, index) => {
-    const first = pickFrom(firstNames, grade * 13 + section.charCodeAt(0) + index);
-    const last = pickFrom(lastNames, grade * 17 + section.charCodeAt(0) + index * 3);
+    const first = pickFrom(
+      firstNames,
+      grade * 13 + section.charCodeAt(0) + index,
+    );
+    const last = pickFrom(
+      lastNames,
+      grade * 17 + section.charCodeAt(0) + index * 3,
+    );
     return `${first} ${last} ${grade}${section}`;
   });
 }
@@ -220,7 +233,11 @@ function buildLmsStyleTemplates() {
   ];
 
   const subjectRows = [
-    { suffix: "Arabic", subject: "Arabic Language & Literature", subjectGroup: "Language and literature" },
+    {
+      suffix: "Arabic",
+      subject: "Arabic Language & Literature",
+      subjectGroup: "Language and literature",
+    },
     {
       suffix: "English Language & Literature",
       subject: "English Language & Literature",
@@ -228,9 +245,21 @@ function buildLmsStyleTemplates() {
     },
     { suffix: "Sciences", subject: "Sciences", subjectGroup: "Sciences" },
     { suffix: "Maths", subject: "Maths", subjectGroup: "Mathematics" },
-    { suffix: "Individuals and Societies", subject: "Individuals and Societies (IS)", subjectGroup: "Individuals and societies" },
-    { suffix: "Digital Design", subject: "Digital Design", subjectGroup: "Design" },
-    { suffix: "Product Design", subject: "Product Design", subjectGroup: "Design" },
+    {
+      suffix: "Individuals and Societies",
+      subject: "Individuals and Societies (IS)",
+      subjectGroup: "Individuals and societies",
+    },
+    {
+      suffix: "Digital Design",
+      subject: "Digital Design",
+      subjectGroup: "Design",
+    },
+    {
+      suffix: "Product Design",
+      subject: "Product Design",
+      subjectGroup: "Design",
+    },
     { suffix: "Drama", subject: "Drama", subjectGroup: "Arts" },
     { suffix: "Art", subject: "Visual Arts", subjectGroup: "Arts" },
     {
@@ -238,15 +267,31 @@ function buildLmsStyleTemplates() {
       subject: "Physical and Health Education (PHE)",
       subjectGroup: "Physical and health education",
     },
-    { suffix: "French", subject: "Language Acquisition (FRENCH)", subjectGroup: "Language acquisition" },
-    { suffix: "German", subject: "Language Acquisition (GERMAN)", subjectGroup: "Language acquisition" },
-    { suffix: "Religion", subject: "Religion", subjectGroup: "Individuals and societies" },
+    {
+      suffix: "French",
+      subject: "Language Acquisition (FRENCH)",
+      subjectGroup: "Language acquisition",
+    },
+    {
+      suffix: "German",
+      subject: "Language Acquisition (GERMAN)",
+      subjectGroup: "Language acquisition",
+    },
+    {
+      suffix: "Religion",
+      subject: "Religion",
+      subjectGroup: "Individuals and societies",
+    },
   ];
 
   const templates = [];
   for (const cohort of cohorts) {
     const classPrefix = `MYP ${cohort.grade}${cohort.section}`;
-    const cohortStudents = buildCohortStudents(cohort.grade, cohort.section, cohort.size);
+    const cohortStudents = buildCohortStudents(
+      cohort.grade,
+      cohort.section,
+      cohort.size,
+    );
     for (const row of subjectRows) {
       templates.push({
         className: `${classPrefix} ${row.suffix}`,
@@ -267,12 +312,16 @@ function buildLmsStyleTemplates() {
         classId: `TDC-${sanitizeIdentifier(`${classPrefix}-${lang}-Support`)}`,
         grades: [cohort.grade],
         students: [],
-        subjectProfile: resolveSubjectProfile(`Language Acquisition (${lang.toUpperCase()})`),
+        subjectProfile: resolveSubjectProfile(
+          `Language Acquisition (${lang.toUpperCase()})`,
+        ),
       });
     }
   }
 
-  const allStudents = Array.from(new Set(templates.flatMap((template) => template.students)));
+  const allStudents = Array.from(
+    new Set(templates.flatMap((template) => template.students)),
+  );
   templates.push(
     {
       className: "Arabic Language For Foreigners",
@@ -300,10 +349,63 @@ function buildLmsStyleTemplates() {
       grades: [1, 2, 3, 4, 5],
       students: allStudents.filter((_, index) => index % 9 === 0),
       subjectProfile: resolveSubjectProfile("English Language & Literature"),
-    }
+    },
   );
 
   return templates;
+}
+
+function shiftSectionLetter(letter, shift) {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const index = alphabet.indexOf(letter.toUpperCase());
+  if (index < 0) return letter;
+  return alphabet[(index + shift) % alphabet.length];
+}
+
+function remapClassNameForOrganization(
+  className,
+  organizationIndex,
+  organizationCode,
+) {
+  if (organizationIndex === 0) return className;
+  const mypMatch = className.match(/^MYP\s+(\d)([A-Z])\s+(.+)$/);
+  if (mypMatch) {
+    const [, grade, section, suffix] = mypMatch;
+    return `MYP ${grade}${shiftSectionLetter(section, organizationIndex)} ${suffix}`;
+  }
+  return `${className} ${organizationCode}`;
+}
+
+function buildTemplatesForOrganization(baseTemplates, organizationIndex) {
+  const organizationCode = organizationIndex === 0 ? "CCIS" : "MHIS";
+  const scoreBiasOffset = organizationIndex === 0 ? 0 : -1;
+
+  return baseTemplates.map((template) => {
+    const remappedClassName = remapClassNameForOrganization(
+      template.className,
+      organizationIndex,
+      organizationCode,
+    );
+    return {
+      ...template,
+      className: remappedClassName,
+      classId: `${organizationCode}-${sanitizeIdentifier(remappedClassName)}`,
+      students:
+        organizationIndex === 0
+          ? template.students
+          : template.students.map(
+              (studentName) => `${studentName} ${organizationCode}`,
+            ),
+      subjectProfile: {
+        ...template.subjectProfile,
+        scoreBias: clamp(
+          (template.subjectProfile?.scoreBias ?? 0) + scoreBiasOffset,
+          -2,
+          2,
+        ),
+      },
+    };
+  });
 }
 
 async function main() {
@@ -345,41 +447,18 @@ async function main() {
   `;
   logProgress("Reset public sequences.");
 
-  const organization = await prisma.organization.create({
-    data: { name: "Sample School" },
-  });
-  logProgress(`Created organization: ${organization.name}`);
-
-  const terms = [];
-  for (const academicYearSeed of ACADEMIC_YEARS) {
-    const academicYear = await prisma.academicYear.create({
-      data: {
-        name: academicYearSeed.name,
-        startDate: new Date(academicYearSeed.startDate),
-        endDate: new Date(academicYearSeed.endDate),
-        organizationId: organization.id,
-      },
+  const organizations = [];
+  for (const [name, abbreviation] of ORGANIZATION_NAMES) {
+    const created = await prisma.organization.create({
+      data: { name, abbreviation },
     });
-    const startYear = Number(academicYearSeed.name.slice(0, 4));
-    const termDefinitions = [
-      { name: "T1", startDate: new Date(`${startYear}-08-15`), endDate: new Date(`${startYear}-11-30`) },
-      { name: "T2", startDate: new Date(`${startYear}-12-01`), endDate: new Date(`${startYear + 1}-03-15`) },
-      { name: "T3", startDate: new Date(`${startYear + 1}-03-16`), endDate: new Date(`${startYear + 1}-06-15`) },
-    ];
-
-    for (const term of termDefinitions) {
-      terms.push(
-        await prisma.academicTerm.create({
-          data: {
-            ...term,
-            academicYearId: academicYear.id,
-          },
-        })
-      );
-    }
-    logProgress(`Created academic year ${academicYearSeed.name} with 3 terms.`);
+    organizations.push(created);
+    logProgress(`Created organization: ${created.name}`);
   }
-  logProgress(`Total terms created: ${terms.length}`);
+  const primaryOrganization = organizations[0];
+  if (!primaryOrganization) {
+    throw new Error("No organizations created during seed.");
+  }
 
   const gradeLevels = [];
   for (const grade of [1, 2, 3, 4, 5]) {
@@ -388,250 +467,361 @@ async function main() {
         data: {
           name: String(grade),
         },
-      })
+      }),
     );
   }
-  logProgress(`Created grade levels: ${gradeLevels.map((level) => level.name).join(", ")}`);
-
-  const gradeLevelByName = new Map(gradeLevels.map((level) => [level.name, level]));
-  const lmsTemplates = buildLmsStyleTemplates();
-  logProgress(`Loaded ${lmsTemplates.length} in-code LMS-style class templates.`);
-  const courseCatalog = new Map();
-  const courses = [];
-
-  for (const template of lmsTemplates) {
-    const singleGrade = template.grades.length === 1 ? template.grades[0] : null;
-    const gradeLevelId = singleGrade ? gradeLevelByName.get(String(singleGrade))?.id ?? null : null;
-    const courseKey = `${template.subjectName}::${gradeLevelId ?? "MIXED"}`;
-    if (courseCatalog.has(courseKey)) continue;
-    const course = await prisma.course.create({
-      data: {
-        name: template.subjectName,
-        code: `${sanitizeIdentifier(template.subjectName).slice(0, 16)}-${gradeLevelId ?? "MX"}`,
-        organizationId: organization.id,
-        gradeLevelId,
-      },
-    });
-    courseCatalog.set(courseKey, course.id);
-    courses.push({
-      id: course.id,
-      name: template.subjectName,
-      gradeLevelId,
-      subjectIndex: courses.length,
-      subject: template.subjectProfile,
-      courseIndex: courses.length,
-    });
-  }
-  logProgress(`Created ${courses.length} courses from templates.`);
-
-  const courseById = new Map(courses.map((course) => [course.id, course]));
-
-  const studentsByName = new Map();
-  const studentSeedList = Array.from(
-    new Set(
-      lmsTemplates
-        .flatMap((template) => template.students)
-        .map((name) => name.trim())
-        .filter(Boolean)
-    )
+  logProgress(
+    `Created grade levels: ${gradeLevels.map((level) => level.name).join(", ")}`,
   );
 
-  for (const [index, fullName] of studentSeedList.entries()) {
-    const normalized = fullName.replace(/\s+/g, " ").trim();
-    const matchedTemplate = lmsTemplates.find(
-      (template) => template.students.includes(normalized) && template.grades.length === 1
+  const gradeLevelByName = new Map(
+    gradeLevels.map((level) => [level.name, level]),
+  );
+  const lmsTemplates = buildLmsStyleTemplates();
+  logProgress(
+    `Loaded ${lmsTemplates.length} in-code LMS-style class templates.`,
+  );
+  const totals = {
+    terms: 0,
+    courses: 0,
+    students: 0,
+    classSections: 0,
+    enrollments: 0,
+    gradeEntries: 0,
+    gradeEntryCriteria: 0,
+  };
+
+  for (const [organizationIndex, organization] of organizations.entries()) {
+    const organizationTemplates = buildTemplatesForOrganization(
+      lmsTemplates,
+      organizationIndex,
     );
-    const gradeLevel = matchedTemplate
-      ? gradeLevelByName.get(String(matchedTemplate.grades[0])) ?? null
-      : null;
-    const nameParts = splitNameParts(normalized);
-    const user = await prisma.user.create({
-      data: {
-        email: `student_${sanitizeIdentifier(normalized).toLowerCase()}_${index + 1}@example.com`,
-        role: "STUDENT",
-        displayName: normalized,
-        organizationId: organization.id,
-      },
-    });
-
-    const studentRecord = await prisma.student.create({
-      data: {
-        userId: user.id,
-        organizationId: organization.id,
-        firstName: nameParts.firstName,
-        lastName: nameParts.lastName,
-      },
-    });
-
-    studentsByName.set(normalized, {
-      id: studentRecord.id,
-      gradeLevelId: gradeLevel?.id ?? null,
-      index,
-    });
-  }
-  logProgress(`Created ${studentsByName.size} students from template rosters.`);
-  const studentById = new Map(Array.from(studentsByName.values()).map((student) => [student.id, student]));
-
-  const classSections = [];
-  const enrollmentRows = [];
-  const studentsByClassSectionId = new Map();
-
-  for (const term of terms) {
-    for (const template of lmsTemplates) {
-      const singleGrade = template.grades.length === 1 ? template.grades[0] : null;
-      const gradeLevelId = singleGrade ? gradeLevelByName.get(String(singleGrade))?.id ?? null : null;
-      const courseKey = `${template.subjectName}::${gradeLevelId ?? "MIXED"}`;
-      const courseId = courseCatalog.get(courseKey);
-      if (!courseId) continue;
-
-      const classSection = await prisma.classSection.create({
+    const organizationSlug = sanitizeIdentifier(
+      organization.name,
+    ).toLowerCase();
+    const terms = [];
+    for (const academicYearSeed of ACADEMIC_YEARS) {
+      const academicYear = await prisma.academicYear.create({
         data: {
-          name: template.className,
+          name: academicYearSeed.name,
+          startDate: new Date(academicYearSeed.startDate),
+          endDate: new Date(academicYearSeed.endDate),
           organizationId: organization.id,
-          courseId,
-          academicYearId: term.academicYearId,
-          academicTermId: term.id,
-          rawSourceData: {
-            classId: template.classId,
-            className: template.className,
-            subject: template.subjectName,
-            subjectGroup: template.subjectGroup,
-            grades: template.grades,
-          },
         },
       });
-      classSections.push({
-        id: classSection.id,
-        courseId,
-        academicTermId: term.id,
-      });
+      const startYear = Number(academicYearSeed.name.slice(0, 4));
+      const termDefinitions = [
+        {
+          name: "T1",
+          startDate: new Date(`${startYear}-08-15`),
+          endDate: new Date(`${startYear}-11-30`),
+        },
+        {
+          name: "T2",
+          startDate: new Date(`${startYear}-12-01`),
+          endDate: new Date(`${startYear + 1}-03-15`),
+        },
+        {
+          name: "T3",
+          startDate: new Date(`${startYear + 1}-03-16`),
+          endDate: new Date(`${startYear + 1}-06-15`),
+        },
+      ];
 
-      const enrolledStudentIds = [];
-      for (const studentName of template.students) {
-        const student = studentsByName.get(studentName.trim());
-        if (!student) continue;
-        enrolledStudentIds.push(student.id);
-        enrollmentRows.push({
-          classSectionId: classSection.id,
-          studentId: student.id,
-          role: "STUDENT",
-        });
+      for (const term of termDefinitions) {
+        terms.push(
+          await prisma.academicTerm.create({
+            data: {
+              ...term,
+              academicYearId: academicYear.id,
+            },
+          }),
+        );
       }
-      studentsByClassSectionId.set(classSection.id, enrolledStudentIds);
-    }
-    logProgress(`Created class sections for term ${term.name} (${term.id.slice(0, 8)}...).`);
-  }
-  logProgress(`Created ${classSections.length} class sections across all terms.`);
-
-  const assignmentsByClassSection = new Map();
-  for (const classSection of classSections) {
-    const course = courseById.get(classSection.courseId);
-    if (!course) continue;
-    const term = terms.find((t) => t.id === classSection.academicTermId);
-    if (!term) continue;
-    const termIndex = terms.findIndex((t) => t.id === classSection.academicTermId);
-    const resolvedTermIndex = termIndex < 0 ? 0 : termIndex;
-    const assignments = [];
-    const assignmentCount = 3 + ((course.courseIndex + resolvedTermIndex) % 3);
-    for (let index = 1; index <= assignmentCount; index += 1) {
-      const dueDate = new Date(term.startDate.getTime() + (5 + index * 9) * 24 * 60 * 60 * 1000);
-      const topic = pickFrom(course.subject.topics, course.courseIndex + index + resolvedTermIndex);
-      const assignmentType = pickFrom(
-        course.subject.assignmentTypes,
-        resolvedTermIndex + index + course.subjectIndex
+      logProgress(
+        `Created academic year ${academicYearSeed.name} with 3 terms for ${organization.name}.`,
       );
-      const maxScore = 6 + ((course.subjectIndex + index + resolvedTermIndex) % 3);
-      const created = await prisma.assignment.create({
+    }
+    totals.terms += terms.length;
+
+    const courseCatalog = new Map();
+    const courses = [];
+    for (const template of organizationTemplates) {
+      const singleGrade =
+        template.grades.length === 1 ? template.grades[0] : null;
+      const gradeLevelId = singleGrade
+        ? (gradeLevelByName.get(String(singleGrade))?.id ?? null)
+        : null;
+      const courseKey = `${template.subjectName}::${gradeLevelId ?? "MIXED"}`;
+      if (courseCatalog.has(courseKey)) continue;
+      const course = await prisma.course.create({
         data: {
-          classSectionId: classSection.id,
-          title: `${course.code} ${topic} ${resolvedTermIndex + 1}.${index}`,
-          type: assignmentType,
-          dueDate,
-          maxScore,
+          name: template.subjectName,
+          code: `${sanitizeIdentifier(template.subjectName).slice(0, 16)}-${gradeLevelId ?? "MX"}`,
+          organizationId: organization.id,
+          gradeLevelId,
         },
       });
-      assignments.push({ id: created.id, index });
+      courseCatalog.set(courseKey, course.id);
+      courses.push({
+        id: course.id,
+        name: template.subjectName,
+        gradeLevelId,
+        subjectIndex: courses.length,
+        subject: template.subjectProfile,
+        courseIndex: courses.length,
+      });
     }
-    assignmentsByClassSection.set(classSection.id, assignments);
-  }
-  logProgress("Created assignments for all class sections.");
+    totals.courses += courses.length;
+    const courseById = new Map(courses.map((course) => [course.id, course]));
 
-  if (enrollmentRows.length) {
-    await prisma.enrollment.createMany({ data: enrollmentRows, skipDuplicates: true });
-  }
-  logProgress(`Inserted ${enrollmentRows.length} enrollments.`);
+    const studentsByName = new Map();
+    const studentSeedList = Array.from(
+      new Set(
+        organizationTemplates
+          .flatMap((template) => template.students)
+          .map((name) => name.trim())
+          .filter(Boolean),
+      ),
+    );
+    for (const [index, fullName] of studentSeedList.entries()) {
+      const normalized = fullName.replace(/\s+/g, " ").trim();
+      const matchedTemplate = organizationTemplates.find(
+        (template) =>
+          template.students.includes(normalized) &&
+          template.grades.length === 1,
+      );
+      const gradeLevel = matchedTemplate
+        ? (gradeLevelByName.get(String(matchedTemplate.grades[0])) ?? null)
+        : null;
+      const nameParts = splitNameParts(normalized);
+      const user = await prisma.user.create({
+        data: {
+          email: `student_${sanitizeIdentifier(normalized).toLowerCase()}_${index + 1}_${organizationSlug}@example.com`,
+          role: "STUDENT",
+          displayName: normalized,
+          organizationId: organization.id,
+        },
+      });
 
-  const gradeEntries = [];
-  const gradeEntryCriteria = [];
+      const studentRecord = await prisma.student.create({
+        data: {
+          userId: user.id,
+          organizationId: organization.id,
+          firstName: nameParts.firstName,
+          lastName: nameParts.lastName,
+        },
+      });
 
-  for (const classSection of classSections) {
-    const course = courseById.get(classSection.courseId);
-    if (!course) continue;
-    const term = terms.find((t) => t.id === classSection.academicTermId);
-    if (!term) continue;
-    const assignments = assignmentsByClassSection.get(classSection.id) ?? [];
-    const studentsForClass = (studentsByClassSectionId.get(classSection.id) ?? [])
-      .map((studentId) => {
-        const match = studentById.get(studentId);
-        return match ? { id: studentId, index: match.index } : null;
-      })
-      .filter(Boolean);
-    const termIndex = terms.findIndex((term) => term.id === classSection.academicTermId);
-    const resolvedTermIndex = termIndex < 0 ? 0 : termIndex;
+      studentsByName.set(normalized, {
+        id: studentRecord.id,
+        gradeLevelId: gradeLevel?.id ?? null,
+        index,
+      });
+    }
+    totals.students += studentsByName.size;
+    const studentById = new Map(
+      Array.from(studentsByName.values()).map((student) => [
+        student.id,
+        student,
+      ]),
+    );
 
-    for (const assignment of assignments) {
-      for (const student of studentsForClass) {
-        const entrySeed = `${student.id}:${assignment.id}:${course.id}:${resolvedTermIndex}`;
-        const seed = hashValue(entrySeed);
-        const performanceBand = (student.index * 5 + course.courseIndex * 3 + resolvedTermIndex) % 6;
-        const scoreBase = 2 + performanceBand + course.subject.scoreBias;
-        const gradeEntryId = randomUUID();
-        const score = clamp(scoreBase + ((seed % 5) - 2), 1, 8);
-        const grade =
-          score >= 7 ? "A" : score >= 5 ? "B" : score >= 3 ? "C" : score >= 2 ? "D" : "E";
-        gradeEntries.push({
-          id: gradeEntryId,
-          studentId: student.id,
-          assignmentId: assignment.id,
-          score,
-          grade,
-          feedback: pickFrom(FEEDBACK_BANK, seed),
-          isSubmitted: true,
-          submittedAt: new Date(term.startDate.getTime() + ((seed % 28) + 1) * 24 * 60 * 60 * 1000),
+    const classSections = [];
+    const enrollmentRows = [];
+    const studentsByClassSectionId = new Map();
+    for (const term of terms) {
+      for (const template of organizationTemplates) {
+        const singleGrade =
+          template.grades.length === 1 ? template.grades[0] : null;
+        const gradeLevelId = singleGrade
+          ? (gradeLevelByName.get(String(singleGrade))?.id ?? null)
+          : null;
+        const courseKey = `${template.subjectName}::${gradeLevelId ?? "MIXED"}`;
+        const courseId = courseCatalog.get(courseKey);
+        if (!courseId) continue;
+
+        const classSection = await prisma.classSection.create({
+          data: {
+            name: template.className,
+            organizationId: organization.id,
+            courseId,
+            academicYearId: term.academicYearId,
+            academicTermId: term.id,
+            rawSourceData: {
+              classId: template.classId,
+              className: template.className,
+              subject: template.subjectName,
+              subjectGroup: template.subjectGroup,
+              grades: template.grades,
+            },
+          },
+        });
+        classSections.push({
+          id: classSection.id,
+          courseId,
+          academicTermId: term.id,
         });
 
-        const criteria = ["A", "B", "C", "D"];
-        criteria.forEach((criterion, criterionIndex) => {
-          const criterionSeed = hashValue(`${entrySeed}:${criterion}`);
-          const criterionScore = clamp(
-            score +
-              criterionIndex -
-              1 +
-              ((criterionSeed % 3) - 1) +
-              ((course.subjectIndex + resolvedTermIndex) % 2),
-            1,
-            8
-          );
-          gradeEntryCriteria.push({
-            id: randomUUID(),
-            gradeEntryId,
-            criterion,
-            score: criterionScore,
+        const enrolledStudentIds = [];
+        for (const studentName of template.students) {
+          const student = studentsByName.get(studentName.trim());
+          if (!student) continue;
+          enrolledStudentIds.push(student.id);
+          enrollmentRows.push({
+            classSectionId: classSection.id,
+            studentId: student.id,
+            role: "STUDENT",
           });
+        }
+        studentsByClassSectionId.set(classSection.id, enrolledStudentIds);
+      }
+      logProgress(
+        `Created class sections for term ${term.name} (${term.id.slice(0, 8)}...) in ${organization.name}.`,
+      );
+    }
+    totals.classSections += classSections.length;
+
+    const assignmentsByClassSection = new Map();
+    for (const classSection of classSections) {
+      const course = courseById.get(classSection.courseId);
+      if (!course) continue;
+      const term = terms.find((t) => t.id === classSection.academicTermId);
+      if (!term) continue;
+      const termIndex = terms.findIndex(
+        (t) => t.id === classSection.academicTermId,
+      );
+      const resolvedTermIndex = termIndex < 0 ? 0 : termIndex;
+      const assignments = [];
+      const assignmentCount =
+        3 + ((course.courseIndex + resolvedTermIndex) % 3);
+      for (let index = 1; index <= assignmentCount; index += 1) {
+        const dueDate = new Date(
+          term.startDate.getTime() + (5 + index * 9) * 24 * 60 * 60 * 1000,
+        );
+        const topic = pickFrom(
+          course.subject.topics,
+          course.courseIndex + index + resolvedTermIndex,
+        );
+        const assignmentType = pickFrom(
+          course.subject.assignmentTypes,
+          resolvedTermIndex + index + course.subjectIndex,
+        );
+        const maxScore =
+          6 + ((course.subjectIndex + index + resolvedTermIndex) % 3);
+        const created = await prisma.assignment.create({
+          data: {
+            classSectionId: classSection.id,
+            title: `${course.code} ${topic} ${resolvedTermIndex + 1}.${index}`,
+            type: assignmentType,
+            dueDate,
+            maxScore,
+          },
         });
+        assignments.push({ id: created.id, index });
+      }
+      assignmentsByClassSection.set(classSection.id, assignments);
+    }
+
+    if (enrollmentRows.length) {
+      await prisma.enrollment.createMany({
+        data: enrollmentRows,
+        skipDuplicates: true,
+      });
+    }
+    totals.enrollments += enrollmentRows.length;
+
+    const gradeEntries = [];
+    const gradeEntryCriteria = [];
+    for (const classSection of classSections) {
+      const course = courseById.get(classSection.courseId);
+      if (!course) continue;
+      const term = terms.find((t) => t.id === classSection.academicTermId);
+      if (!term) continue;
+      const assignments = assignmentsByClassSection.get(classSection.id) ?? [];
+      const studentsForClass = (
+        studentsByClassSectionId.get(classSection.id) ?? []
+      )
+        .map((studentId) => {
+          const match = studentById.get(studentId);
+          return match ? { id: studentId, index: match.index } : null;
+        })
+        .filter(Boolean);
+      const termIndex = terms.findIndex(
+        (currentTerm) => currentTerm.id === classSection.academicTermId,
+      );
+      const resolvedTermIndex = termIndex < 0 ? 0 : termIndex;
+
+      for (const assignment of assignments) {
+        for (const student of studentsForClass) {
+          const entrySeed = `${student.id}:${assignment.id}:${course.id}:${resolvedTermIndex}`;
+          const seed = hashValue(entrySeed);
+          const performanceBand =
+            (student.index * 5 + course.courseIndex * 3 + resolvedTermIndex) %
+            6;
+          const scoreBase = 2 + performanceBand + course.subject.scoreBias;
+          const gradeEntryId = randomUUID();
+          const score = clamp(scoreBase + ((seed % 5) - 2), 1, 8);
+          const grade =
+            score >= 7
+              ? "A"
+              : score >= 5
+                ? "B"
+                : score >= 3
+                  ? "C"
+                  : score >= 2
+                    ? "D"
+                    : "E";
+          gradeEntries.push({
+            id: gradeEntryId,
+            studentId: student.id,
+            assignmentId: assignment.id,
+            score,
+            grade,
+            feedback: pickFrom(FEEDBACK_BANK, seed),
+            isSubmitted: true,
+            submittedAt: new Date(
+              term.startDate.getTime() +
+                ((seed % 28) + 1) * 24 * 60 * 60 * 1000,
+            ),
+          });
+
+          const criteria = ["A", "B", "C", "D"];
+          criteria.forEach((criterion, criterionIndex) => {
+            const criterionSeed = hashValue(`${entrySeed}:${criterion}`);
+            const criterionScore = clamp(
+              score +
+                criterionIndex -
+                1 +
+                ((criterionSeed % 3) - 1) +
+                ((course.subjectIndex + resolvedTermIndex) % 2),
+              1,
+              8,
+            );
+            gradeEntryCriteria.push({
+              id: randomUUID(),
+              gradeEntryId,
+              criterion,
+              score: criterionScore,
+            });
+          });
+        }
       }
     }
-  }
 
-  if (gradeEntries.length) {
-    await prisma.gradeEntry.createMany({ data: gradeEntries });
-  }
-  logProgress(`Inserted ${gradeEntries.length} grade entries.`);
+    if (gradeEntries.length) {
+      await prisma.gradeEntry.createMany({ data: gradeEntries });
+    }
+    if (gradeEntryCriteria.length) {
+      await prisma.gradeEntryCriterion.createMany({ data: gradeEntryCriteria });
+    }
+    totals.gradeEntries += gradeEntries.length;
+    totals.gradeEntryCriteria += gradeEntryCriteria.length;
 
-  if (gradeEntryCriteria.length) {
-    await prisma.gradeEntryCriterion.createMany({ data: gradeEntryCriteria });
+    logProgress(
+      `Seeded ${organization.name}: ${studentsByName.size} students, ${classSections.length} class sections, ${gradeEntries.length} grade entries.`,
+    );
   }
-  logProgress(`Inserted ${gradeEntryCriteria.length} grade entry criteria.`);
 
   const adminEmailRaw = normalizeSeedEnv(process.env.SEED_ADMIN_EMAIL);
   const adminPassword = normalizeSeedEnv(process.env.SEED_ADMIN_PASSWORD);
@@ -645,22 +835,24 @@ async function main() {
         passwordHash,
         role: "ADMIN",
         displayName: "Admin",
-        organizationId: organization.id,
+        organizationId: primaryOrganization.id,
       },
       update: {
         passwordHash,
         role: "ADMIN",
         displayName: "Admin",
-        organizationId: organization.id,
+        organizationId: primaryOrganization.id,
       },
     });
   } else if (adminEmail || adminPassword) {
-    console.warn("Seed admin credentials incomplete; skipping admin user creation.");
+    console.warn(
+      "Seed admin credentials incomplete; skipping admin user creation.",
+    );
   }
 
   const durationSeconds = ((Date.now() - startedAt) / 1000).toFixed(2);
   logProgress(
-    `Done. Seeded ${studentsByName.size} students, ${classSections.length} class sections, ${gradeEntries.length} grade entries in ${durationSeconds}s.`
+    `Done. Seeded ${organizations.length} schools, ${totals.students} students, ${totals.classSections} class sections, ${totals.gradeEntries} grade entries in ${durationSeconds}s.`,
   );
 }
 
