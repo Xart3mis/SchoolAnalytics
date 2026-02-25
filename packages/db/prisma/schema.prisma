@@ -31,7 +31,7 @@ model Organization {
 
 model SourceSystem {
   id         String    @id @default(uuid())
-  name       String    @unique // "Toddle", "IXL", "OneRoster"
+  name       String    @unique // "Toddle", "IXL"
   config     Json? // API keys, endpoints (encrypted if sensitive)
   lastSyncAt DateTime?
   createdAt  DateTime  @default(now())
@@ -623,4 +623,56 @@ model AdminNote {
   author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
 
   @@index([pageKey])
+}
+
+// -----------------------------------------------------------------------------
+// INGESTION OBSERVABILITY & STATE
+// -----------------------------------------------------------------------------
+
+enum IngestionRunStatus {
+  QUEUED
+  RUNNING
+  SUCCESS
+  FAILED
+}
+
+model IngestionRun {
+  id               String             @id @default(cuid())
+  source           String
+  startedAt        DateTime           @default(now()) @map("started_at")
+  finishedAt       DateTime?          @map("finished_at")
+  status           IngestionRunStatus @default(QUEUED)
+  recordsFetched   Int                @default(0) @map("records_fetched")
+  recordsProcessed Int                @default(0) @map("records_processed")
+  recordsFailed    Int                @default(0) @map("records_failed")
+
+  errors IngestionError[]
+
+  @@index([source, startedAt])
+  @@index([status, startedAt])
+  @@map("ingestion_runs")
+}
+
+model IngestionCursor {
+  source      String   @id
+  cursorValue String?  @map("cursor_value")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("ingestion_cursors")
+}
+
+model IngestionError {
+  id           String       @id @default(cuid())
+  source       String
+  externalId   String?      @map("external_id")
+  errorMessage String       @map("error_message")
+  payload      Json?
+  runId        String?      @map("run_id")
+  createdAt    DateTime     @default(now()) @map("created_at")
+
+  run IngestionRun? @relation(fields: [runId], references: [id], onDelete: SetNull)
+
+  @@index([source, createdAt])
+  @@index([runId])
+  @@map("ingestion_errors")
 }
