@@ -6,6 +6,7 @@
 packages/db/src/generated
 /.pnp
 .pnp.js
+node_modules/
 
 # testing
 /coverage
