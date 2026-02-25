@@ -1,15 +1,18 @@
 {
   "name": "@school-analytics/worker",
   "version": "0.1.0",
+  "type": "module",
   "private": true,
   "scripts": {
     "dev": "node --watch src/index.js",
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "historical:migrate": "node src/historical-migration.worker.js"
   },
   "dependencies": {
     "@school-analytics/db": "*",
+    "@school-analytics/ingestion": "*",
     "bullmq": "^5.58.5",
     "dotenv": "^17.2.3",
-    "ioredis": "^5.8.1"
+    "ioredis": "^5.9.2"
   }
 }
