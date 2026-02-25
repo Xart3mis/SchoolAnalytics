@@ -1,0 +1,23 @@
+{
+  "name": "@school-analytics/ingestion",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    "./application": {
+      "types": "./application/index.d.ts",
+      "default": "./application/index.js"
+    },
+    "./domain": {
+      "types": "./domain/index.d.ts",
+      "default": "./domain/index.js"
+    },
+    "./infrastructure": {
+      "types": "./infrastructure/index.d.ts",
+      "default": "./infrastructure/index.js"
+    }
+  },
+  "dependencies": {
+    "axios": "^1.13.5",
+    "zod": "^4.3.6"
+  }
+}
