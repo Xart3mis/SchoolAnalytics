@@ -4,11 +4,16 @@ services:
       context: .
       dockerfile: Dockerfile
       target: dev-web
+    env_file:
+      - ./.env
     environment:
       NEXT_TELEMETRY_DISABLED: 1
       CHOKIDAR_USEPOLLING: "true"
       WATCHPACK_POLLING: "true"
+      REDIS_URL: redis://redis:6379
     command: ["npm", "run", "dev", "--workspace", "@school-analytics/web"]
+    volumes:
+      - ./.env:/workspace/apps/web/.env:ro
     develop:
       watch:
         - action: sync
@@ -41,9 +46,15 @@ services:
       context: .
       dockerfile: Dockerfile
       target: dev-worker
+    env_file:
+      - ./.env
     environment:
       CHOKIDAR_USEPOLLING: "true"
+      REDIS_URL: redis://redis:6379
     command: ["npm", "run", "dev", "--workspace", "@school-analytics/worker"]
+    volumes:
+      - ./.env:/workspace/apps/worker/.env:ro
+      - ./apps/worker/saved_responses:/workspace/apps/worker/saved_responses
     develop:
       watch:
         - action: sync
@@ -52,6 +63,7 @@ services:
           initial_sync: true
           ignore:
             - node_modules/
+            - saved_responses/
         - action: sync
           path: ./packages/db
           target: /workspace/packages/db
@@ -59,6 +71,12 @@ services:
           ignore:
             - node_modules/
             - src/generated/
+        - action: sync
+          path: ./packages/ingestion
+          target: /workspace/packages/ingestion
+          initial_sync: true
+          ignore:
+            - node_modules/
         - action: rebuild
           path: ./package.json
         - action: rebuild
@@ -67,15 +85,22 @@ services:
           path: ./apps/worker/package.json
         - action: rebuild
           path: ./packages/db/package.json
+        - action: rebuild
+          path: ./packages/ingestion/package.json
 
   scheduler:
     build:
       context: .
       dockerfile: Dockerfile
       target: dev-scheduler
+    env_file:
+      - ./.env
     environment:
       CHOKIDAR_USEPOLLING: "true"
+      REDIS_URL: redis://redis:6379
     command: ["npm", "run", "dev", "--workspace", "@school-analytics/scheduler"]
+    volumes:
+      - ./.env:/workspace/apps/scheduler/.env:ro
     develop:
       watch:
         - action: sync

@@ -1,8 +1,6 @@
 /* eslint-disable no-console */
-const path = require("path");
 const dotenv = require("dotenv");
 
-dotenv.config({ path: path.resolve(__dirname, "../../../.env"), quiet: true });
 dotenv.config({ quiet: true });
 
 const { randomUUID } = require("crypto");

@@ -71,9 +71,11 @@ services:
       dockerfile: Dockerfile
       target: web
     restart: unless-stopped
+    env_file:
+      - ./.env
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://school:schoolpass@pgbouncer:6432/school_analytics?pgbouncer=true}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      REDIS_URL: redis://redis:6379
       AUTH_COOKIE_NAME: ${AUTH_COOKIE_NAME:-school_analytics_session}
       AUTH_SESSION_TTL_SECONDS: ${AUTH_SESSION_TTL_SECONDS:-604800}
       NEXT_TELEMETRY_DISABLED: 1
@@ -85,6 +87,8 @@ services:
       redis:
         condition: service_healthy
     command: ["sh", "-lc", "npm run build --workspace @school-analytics/web && if [ -f apps/web/.next/standalone/server.js ]; then [ -d apps/web/public ] && cp -r apps/web/public apps/web/.next/standalone/ || true; mkdir -p apps/web/.next/standalone/.next; [ -d apps/web/.next/static ] && cp -r apps/web/.next/static apps/web/.next/standalone/.next/ || true; exec node apps/web/.next/standalone/server.js; elif [ -f apps/web/.next/standalone/apps/web/server.js ]; then [ -d apps/web/public ] && cp -r apps/web/public apps/web/.next/standalone/apps/web/ || true; mkdir -p apps/web/.next/standalone/apps/web/.next; [ -d apps/web/.next/static ] && cp -r apps/web/.next/static apps/web/.next/standalone/apps/web/.next/ || true; exec node apps/web/.next/standalone/apps/web/server.js; else echo 'standalone server.js not found' >&2; exit 1; fi"]
+    volumes:
+      - ./.env:/workspace/.env:ro
     ports:
       - "${WEB_PORT:-3000}:3000"
     networks:
@@ -96,9 +100,11 @@ services:
       dockerfile: Dockerfile
       target: worker
     restart: unless-stopped
+    env_file:
+      - ./.env
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://school:schoolpass@pgbouncer:6432/school_analytics}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      REDIS_URL: redis://redis:6379
       POLL_QUEUE_NAME: ${POLL_QUEUE_NAME:-polling}
       POLL_SOURCES: ${POLL_SOURCES:-Toddle}
     depends_on:
@@ -106,6 +112,9 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      - ./.env:/app/.env:ro
+      - ./apps/worker/saved_responses:/app/apps/worker/saved_responses
     networks:
       - backend
 
@@ -115,9 +124,11 @@ services:
       dockerfile: Dockerfile
       target: scheduler
     restart: unless-stopped
+    env_file:
+      - ./.env
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgresql://school:schoolpass@pgbouncer:6432/school_analytics}
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      REDIS_URL: redis://redis:6379
       POLL_QUEUE_NAME: ${POLL_QUEUE_NAME:-polling}
       POLL_SOURCES: ${POLL_SOURCES:-Toddle}
       POLL_INTERVAL_MS: ${POLL_INTERVAL_MS:-300000}
@@ -127,6 +138,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+      - ./.env:/app/.env:ro
     networks:
       - backend
 
@@ -136,14 +149,113 @@ services:
       dockerfile: Dockerfile
       target: runtime-prep
     profiles: ["tools"]
+    env_file:
+      - ./.env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-school}:${POSTGRES_PASSWORD:-schoolpass}@postgres:5432/${POSTGRES_DB:-school_analytics}
     depends_on:
       postgres:
         condition: service_healthy
     command: ["npm", "run", "prisma:migrate", "--workspace", "@school-analytics/db"]
+    volumes:
+      - ./.env:/workspace/packages/db/.env:ro
     networks:
       - infra
+
+  generate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime-prep
+    profiles: ["tools"]
+    env_file:
+      - ./.env
+    command: ["npm", "run", "prisma:generate", "--workspace", "@school-analytics/db"]
+    volumes:
+      - ./.env:/workspace/packages/db/.env:ro
+    networks:
+      - infra
+
+  reset:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime-prep
+    profiles: ["tools"]
+    env_file:
+      - ./.env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-school}:${POSTGRES_PASSWORD:-schoolpass}@postgres:5432/${POSTGRES_DB:-school_analytics}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["npm", "run", "prisma:reset", "--workspace", "@school-analytics/db"]
+    volumes:
+      - ./.env:/workspace/packages/db/.env:ro
+    networks:
+      - infra
+
+  prisma-studio:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime-prep
+    profiles: ["tools"]
+    env_file:
+      - ./.env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-school}:${POSTGRES_PASSWORD:-schoolpass}@postgres:5432/${POSTGRES_DB:-school_analytics}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["npm", "run", "prisma:studio", "--workspace", "@school-analytics/db"]
+    volumes:
+      - ./.env:/workspace/packages/db/.env:ro
+    ports:
+      - "${PRISMA_STUDIO_PORT:-5555}:5555"
+    networks:
+      - infra
+
+  historical-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime-prep
+    profiles: ["tools"]
+    env_file:
+      - ./.env
+    environment:
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: ["npm", "run", "historical:migrate", "--workspace", "@school-analytics/scheduler"]
+    volumes:
+      - ./.env:/workspace/.env:ro
+    networks:
+      - backend
+
+  historical-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime-prep
+    profiles: ["tools"]
+    env_file:
+      - ./.env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgresql://school:schoolpass@pgbouncer:6432/school_analytics}
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: ["npm", "run", "historical:migrate", "--workspace", "@school-analytics/worker"]
+    volumes:
+      - ./.env:/workspace/.env:ro
+    networks:
+      - backend
 
   seed:
     build:
@@ -151,6 +263,8 @@ services:
       dockerfile: Dockerfile
       target: runtime-prep
     profiles: ["tools"]
+    env_file:
+      - ./.env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-school}:${POSTGRES_PASSWORD:-schoolpass}@postgres:5432/${POSTGRES_DB:-school_analytics}
       SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-}
@@ -159,6 +273,8 @@ services:
       postgres:
         condition: service_healthy
     command: ["npm", "run", "db:seed", "--workspace", "@school-analytics/db"]
+    volumes:
+      - ./.env:/workspace/packages/db/.env:ro
     networks:
       - infra 
 
