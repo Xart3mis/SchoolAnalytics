@@ -1,131 +1,183 @@
-const { v4: uuidv4 } = require("uuid");
-const path = require("path");
-const dotenv = require("dotenv");
+import { FlowProducer } from "bullmq";
+import Redis from "ioredis";
+import dotenv from "dotenv";
+import fs from "node:fs";
+import path from "node:path";
+import { createPrismaClient } from "@school-analytics/db/server";
+import {
+  buildIngestionFlowForest,
+  countFlowNodes,
+} from "@school-analytics/ingestion/domain";
 
-dotenv.config({ path: path.resolve(__dirname, "../../../.env"), quiet: true });
-dotenv.config({ quiet: true });
+function attachRunIdToFlowNode(flowNode, runId) {
+  flowNode.data = {
+    ...(flowNode.data ?? {}),
+    runId,
+  };
 
-const { Queue } = require("bullmq");
-const IORedis = require("ioredis");
+  if (Array.isArray(flowNode.children)) {
+    for (const child of flowNode.children) {
+      attachRunIdToFlowNode(child, runId);
+    }
+  }
+}
+
+let warnedMissingIngestionRunModel = false;
+
+async function createSchedulerRunOrNull(prisma, source) {
+  if (!prisma?.ingestionRun?.create) {
+    if (!warnedMissingIngestionRunModel) {
+      warnedMissingIngestionRunModel = true;
+      console.warn(
+        "[scheduler] Prisma client is missing ingestionRun model; continuing without ingestion_runs tracking (run prisma generate/migrate)",
+      );
+    }
+    return null;
+  }
+
+  return prisma.ingestionRun.create({
+    data: {
+      source,
+      status: "QUEUED",
+    },
+  });
+}
 
 function parseInterval(value, fallbackMs) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallbackMs;
 }
 
-const queueName = process.env.POLL_QUEUE_NAME || "polling";
-const redisUrl = process.env.REDIS_URL || "redis://127.0.0.1:6379";
-const sessionCleanupIntervalMs = parseInterval(
-  process.env.SESSION_CLEANUP_INTERVAL_MS,
-  60 * 60 * 1000,
-);
+dotenv.config({ quiet: true });
 
-const schedulerLockKey = `${queueName}:scheduler:bootstrap-lock`;
-const schedulerLockTtlMs = parseInterval(
-  process.env.SCHEDULER_BOOTSTRAP_LOCK_TTL_MS,
-  30_000,
-);
+function loadRuntimeEnv(label, requiredKeys = []) {
+  const candidates = [
+    process.env.ENV_FILE,
+    path.resolve(process.cwd(), ".env"),
+    path.resolve(process.cwd(), "..", ".env"),
+    path.resolve(process.cwd(), "..", "..", ".env"),
+    path.resolve(process.cwd(), "..", "..", "..", ".env"),
+  ].filter(Boolean);
 
-const schedulerLockToken = uuidv4();
+  const loadedFrom = [];
+  for (const candidate of new Set(candidates)) {
+    if (!fs.existsSync(candidate)) continue;
+    dotenv.config({ path: candidate, quiet: true });
+    loadedFrom.push(candidate);
+  }
 
-const connection = new IORedis(redisUrl, {
+  const presence = Object.fromEntries(
+    requiredKeys.map((key) => [key, Boolean(process.env[key])]),
+  );
+  console.log(`[${label}] env`, {
+    cwd: process.cwd(),
+    loadedFrom,
+    presence,
+  });
+}
+
+loadRuntimeEnv("scheduler", ["REDIS_URL", "DATABASE_URL", "POLL_INTERVAL_MS"]);
+
+const redisUrl = process.env.REDIS_URL;
+
+if (!redisUrl) {
+  throw new Error("REDIS_URL is required for scheduler");
+}
+
+const connection = new Redis(redisUrl, {
   maxRetriesPerRequest: null,
 });
 
-const maintenanceQueue = new Queue(queueName, { connection });
-
-async function acquireBootstrapLock() {
-  const result = await connection.set(
-    schedulerLockKey,
-    schedulerLockToken,
-    "PX",
-    schedulerLockTtlMs,
-    "NX",
-  );
-
-  return result === "OK";
-}
-
-async function releaseBootstrapLock() {
-  try {
-    await connection.eval(
-      `
-        if redis.call("GET", KEYS[1]) == ARGV[1] then
-          return redis.call("DEL", KEYS[1])
-        end
-        return 0
-      `,
-      1,
-      schedulerLockKey,
-      schedulerLockToken,
-    );
-  } catch (error) {
-    console.error("[scheduler] failed to release bootstrap lock:", error);
-  }
-}
-
-async function enqueuePollJobs() {
-  const hasLock = await acquireBootstrapLock();
-  if (!hasLock) {
-    console.log(
-      "[scheduler] another instance is configuring jobs; skipping bootstrap",
-    );
-    return;
-  }
-
-  try {
-    await maintenanceQueue.upsertJobScheduler(
-      "maintenance:expired-sessions",
-      {
-        every: sessionCleanupIntervalMs,
-      },
-      {
-        name: "cleanup-expired-sessions",
-        data: {},
-        opts: {
-          removeOnComplete: 100,
-          removeOnFail: 200,
-        },
-      },
-    );
-
-    console.log(
-      `[scheduler] configured session cleanup on "${queueName}" (cleanup=${sessionCleanupIntervalMs}ms)`,
-    );
-  } finally {
-    await releaseBootstrapLock();
-  }
-}
-
-enqueuePollJobs().catch((error) => {
-  console.error("[scheduler] failed to configure poll jobs:", error);
-  process.exit(1);
+connection.on("error", (error) => {
+  console.error("[scheduler] Redis connection error:", error);
 });
 
-async function shutdown(signal, exitCode = 0) {
-  if (shutdown.inFlight) {
+const flowProducer = new FlowProducer({ connection });
+const { prisma, pool } = createPrismaClient();
+const ingestionIntervalMs = parseInterval(process.env.POLL_INTERVAL_MS, 300_000);
+
+let enqueueInFlight = false;
+let shuttingDown = false;
+let intervalId;
+
+async function enqueueIngestionRun() {
+  if (shuttingDown || enqueueInFlight) {
     return;
   }
-  shutdown.inFlight = true;
-  console.log(`[scheduler] received ${signal}, shutting down...`);
+  enqueueInFlight = true;
+
   try {
-    await maintenanceQueue.close();
+    const flows = buildIngestionFlowForest({ pipelineName: "default" });
+    const run = await createSchedulerRunOrNull(prisma, "toddle:default");
+
+    if (run?.id) {
+      for (const flow of flows) {
+        attachRunIdToFlowNode(flow, run.id);
+      }
+    }
+
+    for (const flow of flows) {
+      console.log(`[scheduler] enqueue flow root ${flow.name} on ${flow.queueName}`);
+      await flowProducer.add(flow);
+    }
+
+    console.log(
+      `[scheduler] enqueued ${countFlowNodes(flows)} jobs across ${flows.length} flow roots${run?.id ? ` (runId=${run.id})` : ""}`,
+    );
   } catch (error) {
-    console.error("[scheduler] failed to close queue:", error);
+    console.error("[scheduler] failed to enqueue ingestion run:", error);
+  } finally {
+    enqueueInFlight = false;
+  }
+}
+
+async function shutdown(signal, exitCode = 0) {
+  if (shuttingDown) {
+    return;
+  }
+  shuttingDown = true;
+  console.log(`[scheduler] received ${signal}, shutting down...`);
+
+  if (intervalId) {
+    clearInterval(intervalId);
+  }
+
+  try {
+    await flowProducer.close();
+  } catch (error) {
+    console.error("[scheduler] failed to close FlowProducer:", error);
   }
   try {
     await connection.quit();
   } catch (error) {
     console.error("[scheduler] failed to close Redis connection:", error);
   }
+  try {
+    await prisma.$disconnect();
+  } catch (error) {
+    console.error("[scheduler] failed to disconnect Prisma:", error);
+  }
+  try {
+    await pool.end();
+  } catch (error) {
+    console.error("[scheduler] failed to close PG pool:", error);
+  }
+
   process.exit(exitCode);
 }
 
-shutdown.inFlight = false;
-
-connection.on("error", (error) => {
-  console.error("[scheduler] Redis connection error:", error);
-});
+try {
+  await enqueueIngestionRun();
+  intervalId = setInterval(() => {
+    void enqueueIngestionRun();
+  }, ingestionIntervalMs);
+  console.log(
+    `[scheduler] polling every ${ingestionIntervalMs}ms for ingestion scheduling`,
+  );
+} catch (error) {
+  console.error("[scheduler] fatal startup error:", error);
+  await shutdown("startup", 1);
+}
 
 process.on("SIGINT", () => {
   void shutdown("SIGINT");
