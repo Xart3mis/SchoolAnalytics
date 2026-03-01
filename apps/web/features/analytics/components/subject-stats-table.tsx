@@ -7,14 +7,23 @@ import type { SubjectStat } from "@/lib/analytics/aggregates";
 interface SubjectStatsTableProps {
   title: string;
   data: SubjectStat[];
+  maxVisibleRows?: number;
 }
 
-export function SubjectStatsTable({ title, data }: SubjectStatsTableProps) {
+export function SubjectStatsTable({
+  title,
+  data,
+  maxVisibleRows,
+}: SubjectStatsTableProps) {
   const [filter, setFilter] = React.useState("");
   const trimmedFilter = filter.trim().toLowerCase();
   const filteredData = trimmedFilter
     ? data.filter((row) => row.subjectName.toLowerCase().includes(trimmedFilter))
     : data;
+  const bodyStyle =
+    typeof maxVisibleRows === "number" && maxVisibleRows > 0
+      ? { maxHeight: `${maxVisibleRows * 48}px` }
+      : undefined;
 
   return (
     <div className="rounded-xl border border-[color:var(--border)] bg-[color:var(--surface)] shadow-[0_14px_34px_-26px_rgba(28,36,48,0.28)] transition-transform duration-300 ease-out hover:-translate-y-0.5 dark:shadow-[0_18px_44px_-32px_rgba(0,0,0,0.55)] sm:rounded-2xl">
@@ -40,7 +49,7 @@ export function SubjectStatsTable({ title, data }: SubjectStatsTableProps) {
             <div>Criterion Avg</div>
             <div>Assessments</div>
           </div>
-          <div className="divide-y divide-[color:var(--border)]">
+          <div className="divide-y divide-[color:var(--border)] overflow-y-auto" style={bodyStyle}>
             {filteredData.length === 0 ? (
               <div className="px-4 py-6 text-sm text-[color:var(--text-muted)]">
                 {data.length === 0 ? "No data yet." : "No subjects match the filter."}

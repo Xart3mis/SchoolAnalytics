@@ -166,7 +166,7 @@ export default async function StudentDetailPage({ params, searchParams }: Studen
       {/*   ]} */}
       {/* /> */}
 
-      <SubjectStatsTable title="Subject Performance" data={subjectStats} />
+      <SubjectStatsTable title="Subject Performance" data={subjectStats} maxVisibleRows={7} />
 
       <section className="stagger grid gap-3 sm:gap-4 xl:grid-cols-[2fr_1fr]">
         <div className="xl:col-span-2">
