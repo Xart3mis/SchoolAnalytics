@@ -11,6 +11,7 @@ import { prisma } from "@/lib/prisma";
 export type OrganizationOption = {
   id: string;
   name: string;
+  abbreviation: string;
 };
 
 export type TenantContext = {
@@ -28,7 +29,7 @@ type SessionUserLike = {
 async function getAccessibleOrganizations(user: SessionUserLike) {
   if (user.role === "ADMIN") {
     return prisma.organization.findMany({
-      select: { id: true, name: true },
+      select: { id: true, name: true, abbreviation: true },
       orderBy: [{ name: "asc" }, { createdAt: "asc" }],
     });
   }
@@ -39,18 +40,20 @@ async function getAccessibleOrganizations(user: SessionUserLike) {
 
   return prisma.organization.findMany({
     where: { id: user.organizationId },
-    select: { id: true, name: true },
+    select: { id: true, name: true, abbreviation: true },
     take: 1,
   });
 }
 
 function pickActiveOrganization(
   organizations: OrganizationOption[],
-  preferredOrganizationId?: string
+  preferredOrganizationId?: string,
 ) {
   if (organizations.length === 0) return null;
   if (preferredOrganizationId) {
-    const preferred = organizations.find((organization) => organization.id === preferredOrganizationId);
+    const preferred = organizations.find(
+      (organization) => organization.id === preferredOrganizationId,
+    );
     if (preferred) return preferred;
   }
   return organizations[0] ?? null;
@@ -58,10 +61,13 @@ function pickActiveOrganization(
 
 export async function resolveTenantContextForUser(
   user: SessionUserLike,
-  preferredOrganizationId?: string
+  preferredOrganizationId?: string,
 ): Promise<TenantContext> {
   const organizations = await getAccessibleOrganizations(user);
-  const activeOrganization = pickActiveOrganization(organizations, preferredOrganizationId);
+  const activeOrganization = pickActiveOrganization(
+    organizations,
+    preferredOrganizationId,
+  );
 
   return {
     organizations,
@@ -73,17 +79,20 @@ export async function resolveTenantContextForUser(
 
 export async function resolveTenantContextForSession(
   session: { user: SessionUserLike },
-  preferredOrganizationId?: string
+  preferredOrganizationId?: string,
 ): Promise<TenantContext> {
   const cookieStore = await cookies();
-  const cookieOrganizationId = cookieStore.get(ACTIVE_ORGANIZATION_COOKIE_NAME)?.value;
-  const requestedOrganizationId = preferredOrganizationId ?? cookieOrganizationId;
+  const cookieOrganizationId = cookieStore.get(
+    ACTIVE_ORGANIZATION_COOKIE_NAME,
+  )?.value;
+  const requestedOrganizationId =
+    preferredOrganizationId ?? cookieOrganizationId;
   return resolveTenantContextForUser(session.user, requestedOrganizationId);
 }
 
 export function applyActiveOrganizationCookie(
   response: NextResponse,
-  organizationId: string | null
+  organizationId: string | null,
 ) {
   if (!organizationId) {
     response.cookies.set(ACTIVE_ORGANIZATION_COOKIE_NAME, "", {

@@ -25,6 +25,7 @@ type AcademicYearOption = {
 type OrganizationOption = {
   id: string;
   name: string;
+  abbreviation: string;
 };
 
 type MeResponse = {
@@ -97,7 +98,10 @@ export function AppHeader() {
     ? selectedYear?.terms.find((term) => term.id === selectedTermId)
     : selectedYear?.terms[selectedYear.terms.length - 1] ?? undefined;
   const activeOrganization = organizations.find((organization) => organization.id === activeOrganizationId);
-  const selectedOrganizationLabel = activeOrganization?.name ?? "School";
+  const selectedOrganizationLabel =
+    activeOrganization?.abbreviation?.trim() ||
+    activeOrganization?.name?.trim() ||
+    "School";
   const selectedYearLabel = selectedYear ? `${selectedYear.name}` : "Select year";
   const selectedTermLabel = selectedTerm?.name ?? "T-";
   const yearTermQuery = new URLSearchParams();
