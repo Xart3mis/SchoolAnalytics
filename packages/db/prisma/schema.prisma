@@ -661,6 +661,14 @@ model IngestionCursor {
   @@map("ingestion_cursors")
 }
 
+model IngestionDependencyCache {
+  source    String   @id
+  payload   Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("ingestion_dependency_cache")
+}
+
 model IngestionError {
   id           String       @id @default(cuid())
   source       String

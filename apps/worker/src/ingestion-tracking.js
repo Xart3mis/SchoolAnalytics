@@ -1,11 +1,267 @@
 import {
   getIngestionJobDefinition,
+  isDependencySourceJob,
   mergeIngestionJobParams,
   extractPaginationContinuation,
   buildIngestionParamSetsFromDependencies,
 } from "@school-analytics/ingestion/domain";
 
 let warnedMissingTelemetryModels = false;
+let warnedMissingDependencyCacheModel = false;
+
+function hasDependencyCacheModel(prisma) {
+  return Boolean(prisma?.ingestionDependencyCache);
+}
+
+function warnMissingDependencyCacheModel(loggerPrefix = "[worker]") {
+  if (warnedMissingDependencyCacheModel) return;
+  warnedMissingDependencyCacheModel = true;
+  console.warn(
+    `${loggerPrefix} Prisma client is missing ingestionDependencyCache model; dependency cache persistence is disabled (run prisma generate/migrate)`,
+  );
+}
+
+function getDependencyCacheKey(source) {
+  return `ingestion:dependency:${source}`;
+}
+
+function getDependencyCacheTtlSeconds() {
+  const raw = Number(process.env.INGESTION_DEPENDENCY_CACHE_TTL_SECONDS ?? 3600);
+  if (!Number.isFinite(raw) || raw < 0) {
+    return 3600;
+  }
+  return Math.floor(raw);
+}
+
+async function readDependencyCacheFromRedis(redisConnection, source) {
+  if (!source || !redisConnection?.get) return null;
+
+  try {
+    const raw = await redisConnection.get(getDependencyCacheKey(source));
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (error) {
+    console.warn(
+      `[worker] failed reading dependency cache from Redis for ${source}:`,
+      error instanceof Error ? error.message : String(error),
+    );
+    return null;
+  }
+}
+
+async function writeDependencyCacheToRedis(redisConnection, source, response) {
+  if (!source || !redisConnection?.set) return;
+
+  const payload = JSON.stringify(response);
+  const ttlSeconds = getDependencyCacheTtlSeconds();
+  try {
+    if (ttlSeconds > 0) {
+      await redisConnection.set(
+        getDependencyCacheKey(source),
+        payload,
+        "EX",
+        ttlSeconds,
+      );
+    } else {
+      await redisConnection.set(getDependencyCacheKey(source), payload);
+    }
+  } catch (error) {
+    console.warn(
+      `[worker] failed writing dependency cache to Redis for ${source}:`,
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
+async function readDependencyCacheFromDb(prisma, source, loggerPrefix) {
+  if (!source) return null;
+  if (!hasDependencyCacheModel(prisma)) {
+    warnMissingDependencyCacheModel(loggerPrefix);
+    return null;
+  }
+
+  try {
+    const row = await prisma.ingestionDependencyCache.findUnique({
+      where: { source },
+    });
+    return row?.payload ?? null;
+  } catch (error) {
+    console.warn(
+      `${loggerPrefix} failed reading dependency cache from DB for ${source}:`,
+      error instanceof Error ? error.message : String(error),
+    );
+    return null;
+  }
+}
+
+async function writeDependencyCacheToDb(prisma, source, response, loggerPrefix) {
+  if (!source) return;
+  if (!hasDependencyCacheModel(prisma)) {
+    warnMissingDependencyCacheModel(loggerPrefix);
+    return;
+  }
+
+  try {
+    await prisma.ingestionDependencyCache.upsert({
+      where: { source },
+      create: {
+        source,
+        payload: response,
+      },
+      update: {
+        payload: response,
+      },
+    });
+  } catch (error) {
+    console.warn(
+      `${loggerPrefix} failed writing dependency cache to DB for ${source}:`,
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
+async function readCachedDependencyResponse({
+  source,
+  redisConnection,
+  prisma,
+  loggerPrefix,
+}) {
+  const fromRedis = await readDependencyCacheFromRedis(redisConnection, source);
+  if (fromRedis !== null && fromRedis !== undefined) {
+    return { source: "redis", response: fromRedis };
+  }
+
+  const fromDb = await readDependencyCacheFromDb(prisma, source, loggerPrefix);
+  if (fromDb !== null && fromDb !== undefined) {
+    await writeDependencyCacheToRedis(redisConnection, source, fromDb);
+    return { source: "database", response: fromDb };
+  }
+
+  return null;
+}
+
+async function persistDependencyCache({
+  source,
+  response,
+  redisConnection,
+  prisma,
+  loggerPrefix,
+}) {
+  if (!source || response === undefined || response === null) {
+    return;
+  }
+
+  await Promise.allSettled([
+    writeDependencyCacheToRedis(redisConnection, source, response),
+    writeDependencyCacheToDb(prisma, source, response, loggerPrefix),
+  ]);
+}
+
+function normalizeDependencyValue(rawValue) {
+  const hasResult =
+    rawValue &&
+    typeof rawValue === "object" &&
+    Object.prototype.hasOwnProperty.call(rawValue, "result");
+  const hasDependencyResult =
+    rawValue &&
+    typeof rawValue === "object" &&
+    Object.prototype.hasOwnProperty.call(rawValue, "dependencyResult");
+
+  if (
+    rawValue &&
+    typeof rawValue === "object" &&
+    typeof rawValue.type === "string" &&
+    (hasResult || hasDependencyResult)
+  ) {
+    const dependencyResult =
+      hasDependencyResult &&
+      rawValue.dependencyResult !== undefined &&
+      rawValue.dependencyResult !== null
+        ? rawValue.dependencyResult
+        : rawValue.result;
+    return { type: rawValue.type, result: dependencyResult };
+  }
+
+  return { type: null, result: rawValue };
+}
+
+async function resolveDependencyValuesWithCache({
+  definition,
+  dependencyValues,
+  loggerPrefix,
+  redisConnection,
+  prisma,
+}) {
+  const dependencySpecs = definition?.paramsFrom?.dependencies ?? [];
+  if (dependencySpecs.length === 0) {
+    return dependencyValues;
+  }
+
+  const dependencyTypes = [
+    ...new Set(
+      dependencySpecs
+        .map((dependencySpec) => dependencySpec?.jobType)
+        .filter(Boolean),
+    ),
+  ];
+
+  const runtimeByType = new Map();
+  for (const rawValue of dependencyValues) {
+    const { type, result } = normalizeDependencyValue(rawValue);
+    if (!type) {
+      continue;
+    }
+
+    const bucket = runtimeByType.get(type) ?? [];
+    bucket.push(result);
+    runtimeByType.set(type, bucket);
+  }
+
+  const resolvedByType = new Map();
+  for (const dependencyType of dependencyTypes) {
+    const runtimeValues = runtimeByType.get(dependencyType) ?? [];
+    const combinedValues = [];
+
+    const cached = await readCachedDependencyResponse({
+      source: dependencyType,
+      redisConnection,
+      prisma,
+      loggerPrefix,
+    });
+    if (cached?.response !== null && cached?.response !== undefined) {
+      combinedValues.push(cached.response);
+      console.log(
+        `${loggerPrefix} using cached dependency response for ${dependencyType} from ${cached.source}`,
+      );
+    }
+
+    if (runtimeValues?.length) {
+      combinedValues.push(...runtimeValues);
+      const runtimeCachePayload =
+        runtimeValues.length === 1 ? runtimeValues[0] : runtimeValues;
+      await persistDependencyCache({
+        source: dependencyType,
+        response: runtimeCachePayload,
+        redisConnection,
+        prisma,
+        loggerPrefix,
+      });
+    }
+
+    if (combinedValues.length > 0) {
+      resolvedByType.set(dependencyType, combinedValues);
+    }
+  }
+
+  const resolved = [];
+  for (const [type, results] of resolvedByType.entries()) {
+    for (const result of results) {
+      resolved.push({ type, result });
+    }
+  }
+
+  return resolved;
+}
 
 function hasTelemetryModels(prisma) {
   return Boolean(
@@ -249,6 +505,7 @@ export async function executeTrackedIngestionJob({
   processorFactory,
   useCase,
   prisma,
+  redisConnection = null,
   maxPaginationPages = 1000,
   loggerPrefix = "[worker]",
 }) {
@@ -261,6 +518,7 @@ export async function executeTrackedIngestionJob({
   await markRunRunning(prisma, runId);
 
   const definition = getIngestionJobDefinition(type);
+  const publishDependencyResult = isDependencySourceJob(type);
   const source = sourceFactory.create(type);
   const processor = processorFactory.create(type);
   const baseParams = mergeIngestionJobParams(type, params);
@@ -282,6 +540,14 @@ export async function executeTrackedIngestionJob({
         error instanceof Error ? error.message : String(error),
       );
     }
+
+    dependencyValues = await resolveDependencyValuesWithCache({
+      definition,
+      dependencyValues,
+      loggerPrefix,
+      redisConnection,
+      prisma,
+    });
   }
 
   const paramSets = buildIngestionParamSetsFromDependencies(
@@ -308,6 +574,7 @@ export async function executeTrackedIngestionJob({
   let totalPagesProcessed = 0;
   let totalRecordsProcessed = 0;
   let lastResult = null;
+  const dependencyResults = publishDependencyResult ? [] : null;
   let paginationMode = "none";
 
   for (const [index, initialParams] of paramSets.entries()) {
@@ -348,6 +615,9 @@ export async function executeTrackedIngestionJob({
 
       const result = await useCase.execute(source, processor, effectiveParams);
       lastResult = result;
+      if (dependencyResults) {
+        dependencyResults.push(result);
+      }
 
       const pageRecordCount = countRecordsInResult(result);
       totalRecordsProcessed += pageRecordCount;
@@ -411,9 +681,27 @@ export async function executeTrackedIngestionJob({
     }
   }
 
+  const dependencyResult = dependencyResults
+    ? dependencyResults.length === 0
+      ? lastResult
+      : dependencyResults.length === 1
+        ? dependencyResults[0]
+        : dependencyResults
+    : null;
+
+  if (publishDependencyResult && dependencyResult !== null && dependencyResult !== undefined) {
+    await persistDependencyCache({
+      source: type,
+      response: dependencyResult,
+      redisConnection,
+      prisma,
+      loggerPrefix,
+    });
+  }
+
   return {
     type,
-    result: lastResult,
+    ...(publishDependencyResult ? { dependencyResult } : {}),
     pagesProcessed: totalPagesProcessed,
     pagination: paginationMode,
     completed: true,

@@ -1,5 +1,7 @@
 export * from "./interfaces/index.js";
 
+const SHOULD_PERSIST_CURSOR = true;
+
 export const ingestion_job_definitions = {
   assignments: {
     section: "assignments",
@@ -24,7 +26,7 @@ export const ingestion_job_definitions = {
       cursorParam: "cursor",
       nextCursorPath: ["pageInfo", "endCursor"],
       hasNextPagePath: ["pageInfo", "hasNextPage"],
-      persistCursor: false,
+      persistCursor: SHOULD_PERSIST_CURSOR,
     },
   },
   // "assignment-by-id": {
@@ -54,7 +56,7 @@ export const ingestion_job_definitions = {
       cursorParam: "cursor",
       nextCursorPath: ["pageInfo", "endCursor"],
       hasNextPagePath: ["pageInfo", "hasNextPage"],
-      persistCursor: false,
+      persistCursor: SHOULD_PERSIST_CURSOR,
     },
   },
   // "student-assignment-by-student-id": {
@@ -129,7 +131,7 @@ export const ingestion_job_definitions = {
       cursorParam: "cursor",
       nextCursorPath: ["pageInfo", "endCursor"],
       hasNextPagePath: ["pageInfo", "hasNextPage"],
-      persistCursor: false,
+      persistCursor: SHOULD_PERSIST_CURSOR,
     },
   },
   courses: {
@@ -262,16 +264,41 @@ export function mergeIngestionJobParams(jobType, params = {}) {
   };
 }
 
+export function isDependencySourceJob(jobType) {
+  if (!jobType) return false;
+
+  return Object.values(ingestion_job_definitions).some((definition) =>
+    (definition?.paramsFrom?.dependencies ?? []).some(
+      (dependencySpec) => dependencySpec?.jobType === jobType,
+    ),
+  );
+}
+
 function normalizeDependencyResult(value) {
+  const hasResult =
+    value &&
+    typeof value === "object" &&
+    Object.prototype.hasOwnProperty.call(value, "result");
+  const hasDependencyResult =
+    value &&
+    typeof value === "object" &&
+    Object.prototype.hasOwnProperty.call(value, "dependencyResult");
+
   if (
     value &&
     typeof value === "object" &&
     typeof value.type === "string" &&
-    Object.prototype.hasOwnProperty.call(value, "result")
+    (hasResult || hasDependencyResult)
   ) {
+    const dependencyResult =
+      hasDependencyResult &&
+      value.dependencyResult !== undefined &&
+      value.dependencyResult !== null
+        ? value.dependencyResult
+        : value.result;
     return {
       type: value.type,
-      result: value.result,
+      result: dependencyResult,
     };
   }
 
@@ -296,6 +323,52 @@ function toArray(value, { coerceObjectToArray = false } = {}) {
   return [];
 }
 
+function toDependencyResultCandidates(parentResult) {
+  if (Array.isArray(parentResult)) {
+    return parentResult;
+  }
+
+  if (!parentResult || typeof parentResult !== "object") {
+    return [parentResult];
+  }
+
+  if (
+    parentResult.__format === "paginated-response-archive" &&
+    Array.isArray(parentResult.pages)
+  ) {
+    const pageResponses = parentResult.pages
+      .map((page) => page?.response)
+      .filter((response) => response !== undefined && response !== null);
+    if (pageResponses.length > 0) {
+      return pageResponses;
+    }
+  }
+
+  if (Array.isArray(parentResult.responses)) {
+    return parentResult.responses;
+  }
+
+  return [parentResult];
+}
+
+function transformDependencyResponseToItems(parentResult, dependencySpec) {
+  const { itemsPath, coerceObjectToArray = false } = dependencySpec ?? {};
+  const candidates = toDependencyResultCandidates(parentResult);
+  const items = [];
+
+  for (const candidate of candidates) {
+    const container = Array.isArray(itemsPath)
+      ? getByPath(candidate, itemsPath)
+      : candidate;
+    const nextItems = toArray(container, { coerceObjectToArray });
+    if (nextItems.length > 0) {
+      items.push(...nextItems);
+    }
+  }
+
+  return items;
+}
+
 function buildDependencyFragments(dependencySpec, dependencyResultsByType) {
   const {
     jobType,
@@ -314,14 +387,18 @@ function buildDependencyFragments(dependencySpec, dependencyResultsByType) {
   const values = [];
 
   for (const parentResult of parentResults) {
-    const container = Array.isArray(itemsPath) ? getByPath(parentResult, itemsPath) : parentResult;
-    const items = toArray(container, { coerceObjectToArray });
+    const items = transformDependencyResponseToItems(parentResult, {
+      itemsPath,
+      coerceObjectToArray,
+    });
 
     for (const item of items) {
       if (fields && typeof fields === "object") {
         const fragment = {};
         for (const [fieldName, fieldPath] of Object.entries(fields)) {
-          const fieldValue = Array.isArray(fieldPath) ? getByPath(item, fieldPath) : item?.[fieldPath];
+          const fieldValue = Array.isArray(fieldPath)
+            ? getByPath(item, fieldPath)
+            : item?.[fieldPath];
           if (
             fieldValue === undefined ||
             fieldValue === null ||
@@ -337,7 +414,9 @@ function buildDependencyFragments(dependencySpec, dependencyResultsByType) {
         continue;
       }
 
-      const value = Array.isArray(itemValuePath) ? getByPath(item, itemValuePath) : item;
+      const value = Array.isArray(itemValuePath)
+        ? getByPath(item, itemValuePath)
+        : item;
       if (value === undefined || value === null || value === "") {
         continue;
       }
@@ -582,7 +661,11 @@ function getFirstArrayCandidate(value, preferredPath) {
   return null;
 }
 
-export function extractPaginationContinuation(jobType, result, currentParams = {}) {
+export function extractPaginationContinuation(
+  jobType,
+  result,
+  currentParams = {},
+) {
   const definition = getIngestionJobDefinition(jobType);
   const pagination = definition?.pagination;
 
@@ -759,14 +842,17 @@ export function buildIngestionFlowForest({
   const dependencySet = new Set();
 
   for (const jobType of jobTypes) {
-    for (const dependency of ingestion_job_definitions[jobType].dependsOn ?? []) {
+    for (const dependency of ingestion_job_definitions[jobType].dependsOn ??
+      []) {
       if (pipelineSet.has(dependency)) {
         dependencySet.add(dependency);
       }
     }
   }
 
-  const rootJobTypes = jobTypes.filter((jobType) => !dependencySet.has(jobType));
+  const rootJobTypes = jobTypes.filter(
+    (jobType) => !dependencySet.has(jobType),
+  );
 
   return rootJobTypes.map((jobType) =>
     buildFlowNode(jobType, { pipelineSet, queuePrefix }),

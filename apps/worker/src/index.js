@@ -81,6 +81,57 @@ let finalizingRuns = false;
 let shuttingDown = false;
 const workers = [];
 
+function parsePositiveInt(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+}
+
+function parseNonNegativeInt(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : fallback;
+}
+
+const shutdownGraceMs = parsePositiveInt(
+  process.env.WORKER_SHUTDOWN_GRACE_MS,
+  15000,
+);
+const shutdownForceExitMs = parsePositiveInt(
+  process.env.WORKER_SHUTDOWN_FORCE_EXIT_MS,
+  30000,
+);
+const workerLockDurationMs = parsePositiveInt(
+  process.env.WORKER_LOCK_DURATION_MS,
+  300000,
+);
+const workerStalledIntervalMs = parsePositiveInt(
+  process.env.WORKER_STALLED_INTERVAL_MS,
+  30000,
+);
+const workerMaxStalledCount = parseNonNegativeInt(
+  process.env.WORKER_MAX_STALLED_COUNT,
+  5,
+);
+const workerConcurrency = parsePositiveInt(process.env.WORKER_CONCURRENCY, 1);
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function settleWithTimeout(promises, timeoutMs) {
+  const settled = Promise.allSettled(promises);
+  const timedOut = await Promise.race([
+    settled.then(() => false),
+    sleep(timeoutMs).then(() => true),
+  ]);
+
+  if (timedOut) {
+    return { timedOut: true };
+  }
+
+  await settled;
+  return { timedOut: false };
+}
+
 async function getPendingCount() {
   const counts = await Promise.all(
     monitorQueues.map((queue) =>
@@ -143,6 +194,7 @@ Object.keys(section_jobs).forEach((section) => {
           processorFactory,
           useCase,
           prisma,
+          redisConnection: connection,
           maxPaginationPages: maxCursorPages,
           loggerPrefix: "[worker]",
         });
@@ -165,7 +217,13 @@ Object.keys(section_jobs).forEach((section) => {
         throw error; // Re-throw for BullMQ retries
       }
     },
-    { connection },
+    {
+      connection,
+      lockDuration: workerLockDurationMs,
+      stalledInterval: workerStalledIntervalMs,
+      maxStalledCount: workerMaxStalledCount,
+      concurrency: workerConcurrency,
+    },
   );
 
   workers.push(worker);
@@ -175,10 +233,24 @@ Object.keys(section_jobs).forEach((section) => {
 function callbacks_clean(worker, queueName) {
   worker.on("ready", () => {
     console.log(`[worker] listening on queue \"${queueName}\"`);
+    console.log(
+      `[worker] queue settings ${queueName}: lockDuration=${workerLockDurationMs}ms stalledInterval=${workerStalledIntervalMs}ms maxStalledCount=${workerMaxStalledCount} concurrency=${workerConcurrency}`,
+    );
   });
 
   worker.on("completed", (job) => {
-    console.log(`[worker] completed job ${job.id} (${job.name})`);
+    const output = job?.returnvalue;
+    const summary = output && typeof output === "object"
+      ? {
+          pagesProcessed: output.pagesProcessed,
+          recordsProcessed: output.recordsProcessed,
+          paramSets: output.paramSets,
+          pagination: output.pagination,
+        }
+      : null;
+    console.log(
+      `[worker] completed job ${job.id} (${job.name})${summary ? ` ${JSON.stringify(summary)}` : ""}`,
+    );
     if (job?.data?.runId) {
       touchedRunIds.add(job.data.runId);
     }
@@ -195,6 +267,12 @@ function callbacks_clean(worker, queueName) {
     }
     void maybeFinalizeRunsWhenIdle();
   });
+
+  worker.on("stalled", (jobId, prev) => {
+    console.warn(
+      `[worker] stalled job ${jobId} on ${queueName}${prev ? ` (prev=${prev})` : ""}`,
+    );
+  });
 }
 
 async function shutdown(signal, exitCode = 0) {
@@ -204,8 +282,31 @@ async function shutdown(signal, exitCode = 0) {
   shuttingDown = true;
   console.log(`[worker] received ${signal}, shutting down...`);
 
+  const forceExitCode = exitCode === 0 ? 1 : exitCode;
+  const forcedExitTimer = setTimeout(() => {
+    console.error(
+      `[worker] shutdown exceeded ${shutdownForceExitMs}ms; forcing exit`,
+    );
+    process.exit(forceExitCode);
+  }, shutdownForceExitMs);
+
   try {
-    await Promise.allSettled(workers.map((worker) => worker.close()));
+    await Promise.allSettled(workers.map((worker) => worker.pause(true)));
+  } catch (error) {
+    console.error("[worker] failed to pause BullMQ workers:", error);
+  }
+
+  try {
+    const workerClose = await settleWithTimeout(
+      workers.map((worker) => worker.close()),
+      shutdownGraceMs,
+    );
+    if (workerClose.timedOut) {
+      console.warn(
+        `[worker] graceful worker close exceeded ${shutdownGraceMs}ms; forcing close`,
+      );
+      await Promise.allSettled(workers.map((worker) => worker.close(true)));
+    }
   } catch (error) {
     console.error("[worker] failed to close BullMQ workers:", error);
   }
@@ -230,6 +331,7 @@ async function shutdown(signal, exitCode = 0) {
     console.error("[worker] failed to close PG pool:", error);
   }
 
+  clearTimeout(forcedExitTimer);
   process.exit(exitCode);
 }
 

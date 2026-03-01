@@ -65,10 +65,10 @@ function hasPaginatedResponseShape(data) {
 
   return Boolean(
     data?.pageInfo ||
-      data?.response?.pageInfo ||
-      data?.data?.pageInfo ||
-      data?.meta?.pageInfo ||
-      data?.pagination,
+    data?.response?.pageInfo ||
+    data?.data?.pageInfo ||
+    data?.meta?.pageInfo ||
+    data?.pagination,
   );
 }
 
@@ -78,7 +78,10 @@ async function readJson(filePath) {
     return JSON.parse(raw);
   } catch (error) {
     if (error?.code === "ENOENT") return null;
-    console.warn("[ingestion] failed reading existing saved response JSON:", error);
+    console.warn(
+      "[ingestion] failed reading existing saved response JSON:",
+      error,
+    );
     return null;
   }
 }
@@ -195,15 +198,15 @@ export class AxiosHttpClient extends IHttpClient {
 
     const response = await this.requestWithRetry(url, normalizedOptions);
 
-    try {
-      await saveResponseJson({
-        url,
-        params: normalizedOptions.params,
-        data: response.data,
-      });
-    } catch (error) {
-      console.error("Error writing file:", error);
-    }
+    // try {
+    //   await saveResponseJson({
+    //     url,
+    //     params: normalizedOptions.params,
+    //     data: response.data,
+    //   });
+    // } catch (error) {
+    //   console.error("Error writing file:", error);
+    // }
 
     return response.data;
   }

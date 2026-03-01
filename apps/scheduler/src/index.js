@@ -94,7 +94,10 @@ connection.on("error", (error) => {
 
 const flowProducer = new FlowProducer({ connection });
 const { prisma, pool } = createPrismaClient();
-const ingestionIntervalMs = parseInterval(process.env.POLL_INTERVAL_MS, 300_000);
+const ingestionIntervalMs = parseInterval(
+  process.env.POLL_INTERVAL_MS,
+  300_000,
+);
 
 let enqueueInFlight = false;
 let shuttingDown = false;
@@ -117,7 +120,9 @@ async function enqueueIngestionRun() {
     }
 
     for (const flow of flows) {
-      console.log(`[scheduler] enqueue flow root ${flow.name} on ${flow.queueName}`);
+      console.log(
+        `[scheduler] enqueue flow root ${flow.name} on ${flow.queueName}`,
+      );
       await flowProducer.add(flow);
     }
 

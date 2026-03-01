@@ -91,6 +91,38 @@ let failureCount = 0;
 let shuttingDown = false;
 const touchedRunIds = new Set();
 
+function parsePositiveInt(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
+}
+
+function parseNonNegativeInt(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : fallback;
+}
+
+const shutdownGraceMs = parsePositiveInt(
+  process.env.WORKER_SHUTDOWN_GRACE_MS,
+  15000,
+);
+const shutdownForceExitMs = parsePositiveInt(
+  process.env.WORKER_SHUTDOWN_FORCE_EXIT_MS,
+  30000,
+);
+const workerLockDurationMs = parsePositiveInt(
+  process.env.WORKER_LOCK_DURATION_MS,
+  300000,
+);
+const workerStalledIntervalMs = parsePositiveInt(
+  process.env.WORKER_STALLED_INTERVAL_MS,
+  30000,
+);
+const workerMaxStalledCount = parseNonNegativeInt(
+  process.env.WORKER_MAX_STALLED_COUNT,
+  5,
+);
+const workerConcurrency = parsePositiveInt(process.env.WORKER_CONCURRENCY, 1);
+
 connection.on("error", (error) => {
   console.error("[historical-worker] Redis connection error:", error);
 });
@@ -108,6 +140,7 @@ async function processJob(job) {
       processorFactory,
       useCase,
       prisma,
+      redisConnection: connection,
       maxPaginationPages: maxCursorPages,
       loggerPrefix: "[historical-worker]",
     });
@@ -131,6 +164,10 @@ const workers = queueNames.map(
   (queueName) =>
     new Worker(queueName, processJob, {
       connection,
+      lockDuration: workerLockDurationMs,
+      stalledInterval: workerStalledIntervalMs,
+      maxStalledCount: workerMaxStalledCount,
+      concurrency: workerConcurrency,
     }),
 );
 
@@ -139,10 +176,24 @@ for (const [index, worker] of workers.entries()) {
 
   worker.on("ready", () => {
     console.log(`[historical-worker] listening on ${queueName}`);
+    console.log(
+      `[historical-worker] queue settings ${queueName}: lockDuration=${workerLockDurationMs}ms stalledInterval=${workerStalledIntervalMs}ms maxStalledCount=${workerMaxStalledCount} concurrency=${workerConcurrency}`,
+    );
   });
 
   worker.on("completed", (job) => {
-    console.log(`[historical-worker] completed job ${job.id} (${job.name})`);
+    const output = job?.returnvalue;
+    const summary = output && typeof output === "object"
+      ? {
+          pagesProcessed: output.pagesProcessed,
+          recordsProcessed: output.recordsProcessed,
+          paramSets: output.paramSets,
+          pagination: output.pagination,
+        }
+      : null;
+    console.log(
+      `[historical-worker] completed job ${job.id} (${job.name})${summary ? ` ${JSON.stringify(summary)}` : ""}`,
+    );
     if (job?.data?.runId) {
       touchedRunIds.add(job.data.runId);
     }
@@ -162,10 +213,31 @@ for (const [index, worker] of workers.entries()) {
   worker.on("error", (error) => {
     console.error("[historical-worker] BullMQ worker error:", error);
   });
+
+  worker.on("stalled", (jobId, prev) => {
+    console.warn(
+      `[historical-worker] stalled job ${jobId} on ${queueName}${prev ? ` (prev=${prev})` : ""}`,
+    );
+  });
 }
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function settleWithTimeout(promises, timeoutMs) {
+  const settled = Promise.allSettled(promises);
+  const timedOut = await Promise.race([
+    settled.then(() => false),
+    sleep(timeoutMs).then(() => true),
+  ]);
+
+  if (timedOut) {
+    return { timedOut: true };
+  }
+
+  await settled;
+  return { timedOut: false };
 }
 
 async function getPendingCount() {
@@ -220,8 +292,40 @@ async function shutdown(exitCode = 0) {
   }
   shuttingDown = true;
 
-  await Promise.allSettled(workers.map((worker) => worker.close()));
-  await Promise.allSettled(monitorQueues.map((queue) => queue.close()));
+  const forceExitCode = exitCode === 0 ? 1 : exitCode;
+  const forcedExitTimer = setTimeout(() => {
+    console.error(
+      `[historical-worker] shutdown exceeded ${shutdownForceExitMs}ms; forcing exit`,
+    );
+    process.exit(forceExitCode);
+  }, shutdownForceExitMs);
+
+  try {
+    await Promise.allSettled(workers.map((worker) => worker.pause(true)));
+  } catch (error) {
+    console.error("[historical-worker] failed to pause BullMQ workers:", error);
+  }
+
+  try {
+    const workerClose = await settleWithTimeout(
+      workers.map((worker) => worker.close()),
+      shutdownGraceMs,
+    );
+    if (workerClose.timedOut) {
+      console.warn(
+        `[historical-worker] graceful worker close exceeded ${shutdownGraceMs}ms; forcing close`,
+      );
+      await Promise.allSettled(workers.map((worker) => worker.close(true)));
+    }
+  } catch (error) {
+    console.error("[historical-worker] failed to close BullMQ workers:", error);
+  }
+
+  try {
+    await Promise.allSettled(monitorQueues.map((queue) => queue.close()));
+  } catch (error) {
+    console.error("[historical-worker] failed to close monitor queues:", error);
+  }
 
   try {
     await connection.quit();
@@ -239,6 +343,7 @@ async function shutdown(exitCode = 0) {
     console.error("[historical-worker] failed to close PG pool:", error);
   }
 
+  clearTimeout(forcedExitTimer);
   process.exit(exitCode);
 }
 
